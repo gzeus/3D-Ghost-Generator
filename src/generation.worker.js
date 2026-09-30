@@ -38,6 +38,8 @@ self.onmessage = async ({ data }) => {
     const size = oriented.boundingBox.getSize(new THREE.Vector3()); oriented.dispose();
     const positions = result.attributes.position.array;
     const indices = result.index.array;
+    result.userData.pickingPositions = cachedOuter.attributes.position.array;
+    result.userData.pickingIndices = cachedOuter.index.array;
     self.postMessage({ type: 'generated', id: data.id, positions, indices, stats, debug: result.userData, flat: size.z < Math.max(size.x, size.y) * 0.1 }, [positions.buffer, indices.buffer]);
     result.dispose();
   } catch (error) { self.postMessage({ type: 'error', id: data.id, message: error.message || 'Could not process this model.' }); }

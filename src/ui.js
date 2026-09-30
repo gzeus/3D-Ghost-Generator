@@ -35,13 +35,16 @@ export function renderUI() {
           <label class="feature-toggle eye-toggle"><input id="eyes" type="checkbox"/> Add see-through eyes</label>
           <p class="control-help">Enables a hollow interior. Openings cut through the front wall into the cavity.</p>
           <fieldset id="eye-controls" disabled>
+            <label class="feature-toggle"><input id="clickEyes" type="checkbox"/> Place eyes by clicking</label>
+            <p class="control-help" id="placement-help" hidden>Choose a shape and size for the next eye, then click the ghost. Drag to orbit; each click uses the current camera direction. Existing eyes keep their own size.</p>
             <label class="dimension-control" for="eyeShape"><span>Eye shape</span><select id="eyeShape"><option value="oval">Oval</option><option value="round">Round</option></select></label>
             <label class="dimension-control" for="eyeWidth"><span id="eyeWidth-label">Eye width</span><span><input id="eyeWidth" type="number" min="0.5" max="100" step="0.5" value="6"/> mm</span></label>
             <label class="dimension-control" for="eyeHeight" id="eyeHeight-row"><span>Eye height</span><span><input id="eyeHeight" type="number" min="0.5" max="100" step="0.5" value="9"/> mm</span></label>
-            <label class="dimension-control" for="eyeSpacing"><span>Eye spacing <small>Center to center</small></span><span><input id="eyeSpacing" type="number" min="1" max="250" step="0.5" value="13"/> mm</span></label>
+            <div id="paired-eye-controls"><label class="dimension-control" for="eyeSpacing"><span>Eye spacing <small>Center to center</small></span><span><input id="eyeSpacing" type="number" min="1" max="250" step="0.5" value="13"/> mm</span></label>
             ${slider('eyeLevel', 'Eye position · height', 10, 95, 65)}
             ${slider('eyeAngle', 'Face direction', -180, 180, 0, '°')}
-            <p class="control-help">0° faces forward (−Y). Rotate the face around the ghost to choose another side.</p>
+            <p class="control-help">0° faces forward (−Y). Rotate the face around the ghost to choose another side.</p></div>
+            <div id="placed-eye-controls" hidden><div class="placed-header"><span id="placed-eye-count" aria-live="polite">0 eyes placed</span><button id="undo-eye" type="button" class="text-button" disabled>Undo last</button><button id="clear-eyes" type="button" class="text-button" disabled>Clear all</button></div><ol id="placed-eye-list" aria-label="Placed eyes"></ol><p class="control-help">No fixed eye limit. Switch this toggle off to use the original pair; your placed eyes are kept. Loading a new source clears placements.</p></div>
           </fieldset>
         </section>
         <details class="debug"><summary>Developer view <span>+</span></summary><div>${[['points','Sampled contour points'],['rings','Generated contour rings'],['plane','Cutoff plane'],['box','Source bounding box'],['wireframe','Ghost wireframe']].map(([key, label]) => `<label><input type="checkbox" data-debug="${key}" ${key === 'plane' ? 'checked' : ''}>${label}</label>`).join('')}</div></details>
@@ -51,6 +54,7 @@ export function renderUI() {
         <div class="viewport-top"><div><span class="eyebrow">THE WORKBENCH</span><h2>Your next friendly haunting.</h2></div><span class="version">PROCEDURAL / V1.0</span></div>
         <div class="view-toolbar"><div class="segmented" aria-label="Preview mode">${['ghost','source','overlay'].map(mode => `<button data-mode="${mode}" class="${mode === 'ghost' ? 'active' : ''}" aria-pressed="${mode === 'ghost'}">${mode[0].toUpperCase() + mode.slice(1)}</button>`).join('')}</div><button id="fit" class="fit-button">⛶ <span>Fit camera</span></button></div>
         <div id="viewport" aria-label="Interactive 3D preview"></div>
+        <div id="placement-banner" class="placement-banner" hidden>Click the ghost to add an eye · Drag to orbit</div>
         <div class="viewport-caption"><span class="caption-mark">↳</span><div><strong id="model-caption">Soft folds. Solid inside.</strong><span>A procedural sheet, made for the real world.</span></div></div>
         <div class="viewport-bottom"><label class="toggle-label"><input id="show-source" type="checkbox"/> Show source</label><span>Drag to orbit <b>·</b> Scroll to zoom <b>·</b> Right-drag to pan</span><div class="axis"><span>Z ↑</span><small>mm</small></div></div>
         <div class="statusbar"><div id="status" role="status" aria-live="polite"><i></i> Preparing your ghost…</div><div id="mesh-stats">—</div></div>

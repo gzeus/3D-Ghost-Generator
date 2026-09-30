@@ -70,6 +70,53 @@ try {
   await evaluate('document.querySelector("#hollow").click()');
   await waitFor('!document.querySelector("#export").disabled');
   assert.equal(await evaluate('document.querySelector("#eyes").checked'), false);
+  await evaluate('document.querySelector("#eyes").click(); document.querySelector("#clickEyes").click(); document.querySelector("#eyeShape").value="oval"; document.querySelector("#eyeShape").dispatchEvent(new Event("change")); document.querySelector("#eyeWidth").value=3; document.querySelector("#eyeWidth").dispatchEvent(new Event("input")); document.querySelector("#eyeHeight").value=5; document.querySelector("#eyeHeight").dispatchEvent(new Event("input"));');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#placed-eye-count").textContent'), /^0 eyes/);
+  const clickScene = async (x, y) => {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+  };
+  await clickScene(400, 300); // Empty space must not add anything.
+  assert.match(await evaluate('document.querySelector("#placed-eye-count").textContent'), /^0 eyes/);
+  await clickScene(850, 605);
+  await waitFor('document.querySelector("#placed-eye-list").children.length === 1 && !document.querySelector("#export").disabled');
+  await evaluate('document.querySelector("#eyeShape").value="round"; document.querySelector("#eyeShape").dispatchEvent(new Event("change")); document.querySelector("#eyeWidth").value=4; document.querySelector("#eyeWidth").dispatchEvent(new Event("input"));');
+  assert.equal(await evaluate('document.querySelector("#export").disabled'), false, 'Brush settings affect only future placements');
+  await clickScene(913, 650);
+  await waitFor('document.querySelector("#placed-eye-list").children.length === 2 && !document.querySelector("#export").disabled');
+  await clickScene(834, 719);
+  await waitFor('document.querySelector("#placed-eye-list").children.length === 3 && !document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#placed-eye-list").textContent'), /Oval · 3 × 5 mm.*Round · 4 × 4 mm/);
+  await evaluate('document.querySelector("#clickEyes").scrollIntoView({block:"start"})');
+  const clickShot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'click-eyes.png'), Buffer.from(clickShot.data, 'base64'));
+  await clickScene(850, 605); // An existing opening must not target the inner rear wall.
+  assert.equal(await evaluate('document.querySelector("#placed-eye-list").children.length'), 3);
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 870, y: 600, button: 'left', clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 950, y: 620, buttons: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 950, y: 620, button: 'left', clickCount: 1 });
+  assert.equal(await evaluate('document.querySelector("#placed-eye-list").children.length'), 3, 'Orbit drag does not place an eye');
+  await rm(path.join(artifacts, 'rabbit_ghost.stl'), { force: true });
+  await evaluate('document.querySelector("#export").click()');
+  for (let i = 0; i < 50 && !(await readdir(artifacts)).includes('rabbit_ghost.stl'); i++) await sleep(100);
+  const clickedSTL = await readFile(path.join(artifacts, 'rabbit_ghost.stl'));
+  const clickedGeometry = new STLLoader().parse(clickedSTL.buffer.slice(clickedSTL.byteOffset, clickedSTL.byteOffset + clickedSTL.byteLength));
+  clickedGeometry.deleteAttribute('normal'); validateSolid(mergeVertices(clickedGeometry, 1e-6));
+  await evaluate('document.querySelector("#eyeSpacing").value=13; document.querySelector("#clickEyes").click()');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#output-note").textContent'), /eye openings \(2\)/);
+  await evaluate('document.querySelector("#clickEyes").click()');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#output-note").textContent'), /eye openings \(3\)/);
+  await evaluate('document.querySelector("#undo-eye").click()');
+  await waitFor('document.querySelector("#placed-eye-list").children.length === 2 && !document.querySelector("#export").disabled');
+  await evaluate('document.querySelector("#placed-eye-list button").click()');
+  await waitFor('document.querySelector("#placed-eye-list").children.length === 1 && !document.querySelector("#export").disabled');
+  await evaluate('document.querySelector("#clear-eyes").click()');
+  await waitFor('document.querySelector("#placed-eye-list").children.length === 0 && !document.querySelector("#export").disabled');
+  await evaluate('document.querySelector("#hollow").click(); document.querySelector("#fit").click()');
+  await waitFor('!document.querySelector("#export").disabled');
   await evaluate('document.querySelector(".sidebar").scrollTop=0');
   await evaluate('document.querySelector("#foldCount").value = 12; document.querySelector("#foldCount").dispatchEvent(new Event("input"));');
   assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
@@ -102,6 +149,6 @@ try {
   assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true);
   const mobile = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'mobile.png'), Buffer.from(mobile.data, 'base64'));
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
-  console.log('Browser checks passed: hollowing, round/oval eyes, wall thickness, open/closed floor, hollow STL round trip, invalid eye settings, demo, live updates, orientation, preview modes, upload, export, invalid STL recovery, mobile layout.');
+  console.log('Browser checks passed: click placement, three independent eyes, orbit/miss/opening filtering, per-eye sizes, paired mode preservation, undo/remove/clear, clicked STL round trip, hollowing, round/oval eyes, wall thickness, open/closed floor, hollow STL round trip, invalid eye settings, demo, live updates, orientation, preview modes, upload, export, invalid STL recovery, mobile layout.');
   await send('Browser.close');
 } finally { socket?.close(); chrome.kill(); }

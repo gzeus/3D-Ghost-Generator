@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { orientGeometry } from './meshUtils.js';
+import { createEyePlacementTool } from './eyePlacementTool.js';
 
 export function createViewer(container) {
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#202a29');
@@ -33,6 +34,8 @@ export function createViewer(container) {
   const outline = new THREE.LineSegments(new THREE.EdgesGeometry(cutoff.geometry), new THREE.LineBasicMaterial({ color: '#95c9aa', transparent: true, opacity: 0.55 })); cutoff.add(outline); scene.add(cutoff);
   let original, boxHelper, contourLines, samplePoints, lastRotation;
   let mode = 'ghost', showSource = false;
+  let placementConfig = {}, placementCallback;
+  const placementTool = createEyePlacementTool(renderer.domElement, camera, scene, eye => placementCallback?.(eye));
   const debug = { plane: true, box: false, rings: false, points: false, wireframe: false };
   const updateVisibility = () => {
     sourceMesh.visible = dimMesh.visible = mode === 'source' || mode === 'overlay' || showSource;
@@ -43,6 +46,7 @@ export function createViewer(container) {
     if (boxHelper) boxHelper.visible = debug.box;
     if (contourLines) contourLines.visible = debug.rings && mode !== 'source';
     if (samplePoints) samplePoints.visible = debug.points;
+    placementTool.configure({ ...placementConfig, visible: ghostMesh.visible });
   };
   function orient(rotation, fraction) {
     if (!original) return;
@@ -68,6 +72,7 @@ export function createViewer(container) {
       ghostMesh.geometry.dispose();
       // Keep Boolean rims crisp while the cloth itself remains smoothly shaded.
       ghostMesh.geometry = geometry.userData.hollow ? toCreasedNormals(geometry, Math.PI / 4) : geometry.clone();
+      placementTool.setGeometry(geometry);
       removeDebug(contourLines); removeDebug(samplePoints);
       const { ringCount, angularSamples: n, sampled, contourPositions } = geometry.userData;
       const points = contourPositions ? new THREE.BufferAttribute(contourPositions, 3) : geometry.attributes.position;
@@ -80,6 +85,7 @@ export function createViewer(container) {
       updateVisibility();
     },
     setMode(value) { mode = value; updateVisibility(); },
+    setEyePlacement(config, callback) { placementConfig = config; placementCallback = callback; placementTool.configure({ ...config, visible: ghostMesh.visible }); },
     setSourceVisible(value) { showSource = value; updateVisibility(); },
     setDebug(key, value) { debug[key] = value; updateVisibility(); },
     fit() {

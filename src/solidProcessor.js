@@ -2,6 +2,39 @@ import * as THREE from 'three';
 import Module from 'manifold-3d';
 import { MeshBVH } from 'three-mesh-bvh';
 import { solidDefaults } from './solidParameters.js';
+import { projectionFrame } from './eyeProjection.js';
+
+function projectedCutter(outer, outerBVH, cavityBVH, placement, thickness, api) {
+  const { point, direction, up, width, height } = placement;
+  if (!Array.isArray(point) || point.length !== 3 || !point.every(Number.isFinite) ||
+      !Array.isArray(direction) || direction.length !== 3 || !Array.isArray(up) || up.length !== 3 ||
+      ![width, height].every(v => Number.isFinite(v) && v > 0)) throw new Error('Invalid placed eye dimensions or projection.');
+  const frame = projectionFrame(direction, up);
+  const reach = outer.boundingBox.getSize(new THREE.Vector3()).length() * 2;
+  const start = new THREE.Vector3(...point).addScaledVector(frame.direction, -reach);
+  const ray = new THREE.Ray(start.clone(), frame.direction);
+  let entry = 0, exit = Infinity;
+  for (const radius of [0, 0.25, 0.5, 0.75, 1]) for (let i = 0; i < (radius ? 96 : 1); i++) {
+    const theta = i / 96 * 2 * Math.PI;
+    ray.origin.copy(start).addScaledVector(frame.right, radius * width / 2 * Math.cos(theta)).addScaledVector(frame.up, radius * height / 2 * Math.sin(theta));
+    const surface = outerBVH.raycastFirst(ray, THREE.DoubleSide);
+    const hits = cavityBVH.raycast(ray, THREE.DoubleSide).sort((a, b) => a.distance - b.distance);
+    const enter = hits.find(h => h.face.normal.dot(ray.direction) < -1e-6);
+    const leave = enter && hits.find(h => h.distance > enter.distance + 1e-5 && h.face.normal.dot(ray.direction) > 1e-6);
+    if (!surface || !enter || !leave || surface.distance >= enter.distance || surface.face.normal.dot(ray.direction) >= 0) throw new Error('The eye does not fully reach the hollow interior here. Move it, reduce its size, or reduce wall thickness.');
+    entry = Math.max(entry, enter.distance); exit = Math.min(exit, leave.distance);
+  }
+  if (exit - entry < Math.max(0.05, thickness * 0.05)) throw new Error('There is not enough interior depth for this eye. Move or shrink it.');
+  const depth = entry + Math.min((exit - entry) * 0.3, thickness * 0.5);
+  const cylinder = api.Manifold.cylinder(depth, width / 2, width / 2, 96);
+  const scaled = cylinder.scale([1, height / width, 1]); cylinder.delete();
+  // x=screen right, y=-screen up, z=cut direction form a right-handed basis.
+  const transform = new THREE.Matrix4().makeBasis(frame.right, frame.up.clone().negate(), frame.direction).setPosition(start);
+  let cutter;
+  try { cutter = scaled.transform(transform.elements); }
+  finally { scaled.delete(); }
+  return { cutter, path: { start: start.toArray(), direction: ray.direction.toArray(), depth, entry, exit } };
+}
 
 function toManifold(geometry, api) {
   return new api.Manifold(new api.Mesh({
@@ -129,34 +162,33 @@ function eyeCutters(outer, cavityGeometry, p, api) {
     center.set(THREE.MathUtils.lerp(prev.cx, next.cx, f), THREE.MathUtils.lerp(prev.cy, next.cy, f), z);
   }
   center.z = z;
-  const reach = outer.boundingBox.getSize(new THREE.Vector3()).length() * 2;
   const cavityBVH = new MeshBVH(cavityGeometry, { indirect: true });
+  const outerBVH = new MeshBVH(outer, { indirect: true });
   const cutters = [], paths = [];
   try {
     for (const side of [-1, 1]) {
-      const start = center.clone().addScaledVector(tangent, side * p.eyeSpacing / 2).addScaledVector(outward, reach);
-      const ray = new THREE.Ray(start.clone(), outward.clone().negate());
-      let entry = 0, exit = Infinity;
-      // Require a shared interior depth across the opening, not just its center.
-      for (const radius of [0, 0.25, 0.5, 0.75, 1]) for (let i = 0; i < (radius ? 96 : 1); i++) {
-        const theta = i / 96 * 2 * Math.PI;
-        ray.origin.copy(start).addScaledVector(tangent, radius * width / 2 * Math.cos(theta));
-        ray.origin.z += radius * eyeHeight / 2 * Math.sin(theta);
-        const hits = cavityBVH.raycast(ray, THREE.DoubleSide).sort((a, b) => a.distance - b.distance);
-        const enter = hits.find(h => h.face.normal.dot(ray.direction) < -1e-6);
-        const leave = enter && hits.find(h => h.distance > enter.distance + 1e-5 && h.face.normal.dot(ray.direction) > 1e-6);
-        if (!enter || !leave) throw new Error('The eyes do not fully reach the hollow interior here. Move them, reduce their size or spacing, or reduce wall thickness.');
-        entry = Math.max(entry, enter.distance); exit = Math.min(exit, leave.distance);
-      }
-      if (exit - entry < Math.max(0.05, p.wallThickness * 0.05)) throw new Error('There is not enough interior depth for these eyes. Move or shrink them.');
-      const depth = entry + Math.min((exit - entry) * 0.3, p.wallThickness * 0.5);
-      const cylinder = api.Manifold.cylinder(depth, width / 2, width / 2, 96);
-      const scaled = cylinder.scale([1, eyeHeight / width, 1]); cylinder.delete();
-      const rotated = scaled.rotate([-90, 0, p.eyeAngle]); scaled.delete();
-      const cutter = rotated.translate(start.toArray()); rotated.delete();
-      cutters.push(cutter);
-      paths.push({ start: start.toArray(), direction: ray.direction.toArray(), depth, entry, exit });
+      const cut = projectedCutter(outer, outerBVH, cavityBVH, {
+        point: center.clone().addScaledVector(tangent, side * p.eyeSpacing / 2).toArray(),
+        direction: outward.clone().negate().toArray(), up: [0, 0, 1], width, height: eyeHeight
+      }, p.wallThickness, api);
+      cutters.push(cut.cutter); paths.push(cut.path);
     }
+    return { cutters, paths };
+  } catch (error) { cutters.forEach(c => c.delete()); throw error; }
+}
+
+function placedEyeCutters(outer, cavityGeometry, p, api) {
+  if (!Array.isArray(p.placedEyes)) throw new Error('Invalid placed eyes.');
+  const cavityBVH = new MeshBVH(cavityGeometry, { indirect: true });
+  const outerBVH = new MeshBVH(outer, { indirect: true });
+  const cutters = [], paths = [];
+  try {
+    p.placedEyes.forEach((eye, i) => {
+      try {
+        const cut = projectedCutter(outer, outerBVH, cavityBVH, eye, p.wallThickness, api);
+        cutters.push(cut.cutter); paths.push(cut.path);
+      } catch (error) { throw new Error(`Eye ${i + 1}: ${error.message} Remove this eye or undo the last placement.`); }
+    });
     return { cutters, paths };
   } catch (error) { cutters.forEach(c => c.delete()); throw error; }
 }
@@ -176,7 +208,8 @@ export async function createSolidProcessor(moduleOptions = {}) {
         return outer.clone();
       }
       if (!Number.isFinite(p.wallThickness) || p.wallThickness < 0.4 || p.wallThickness > 30) throw new Error('Wall thickness must be between 0.4 and 30 mm.');
-      if (p.eyes && (!['round', 'oval'].includes(p.eyeShape) || ![p.eyeWidth, p.eyeHeight, p.eyeSpacing].every(v => Number.isFinite(v) && v > 0) || !Number.isFinite(p.eyeLevel) || p.eyeLevel <= 0 || p.eyeLevel >= 1 || !Number.isFinite(p.eyeAngle))) throw new Error('Enter valid eye dimensions and position.');
+      if (!['paired', 'placed'].includes(p.eyeMode)) throw new Error('Invalid eye placement mode.');
+      if (p.eyes && p.eyeMode === 'paired' && (!['round', 'oval'].includes(p.eyeShape) || ![p.eyeWidth, p.eyeHeight, p.eyeSpacing].every(v => Number.isFinite(v) && v > 0) || !Number.isFinite(p.eyeLevel) || p.eyeLevel <= 0 || p.eyeLevel >= 1 || !Number.isFinite(p.eyeAngle))) throw new Error('Enter valid eye dimensions and position.');
       const key = `${p.wallThickness}:${p.openBottom}`;
       if (!cache || cache.outer !== outer || cache.key !== key) {
         clear();
@@ -194,8 +227,8 @@ export async function createSolidProcessor(moduleOptions = {}) {
       let result = cache.shell, cutters = [], paths = [];
       try {
         if (p.eyes) {
-          ({ cutters, paths } = eyeCutters(outer, cache.cavityGeometry, p, api));
-          result = api.Manifold.difference([cache.shell, ...cutters]);
+          ({ cutters, paths } = (p.eyeMode === 'placed' ? placedEyeCutters : eyeCutters)(outer, cache.cavityGeometry, p, api));
+          if (cutters.length) result = api.Manifold.difference([cache.shell, ...cutters]);
           if (result.isEmpty()) throw new Error('The eye holes removed the entire shell. Reduce their size.');
         }
         // Remove tiny Boolean slivers before Float32 STL serialization.
@@ -208,7 +241,7 @@ export async function createSolidProcessor(moduleOptions = {}) {
           ...outer.userData,
           contourPositions: outer.attributes.position.array.slice(0, outer.userData.ringCount * outer.userData.angularSamples * 3),
           hollow: true, openBottom: p.openBottom, wallThickness: p.wallThickness,
-          eyes: p.eyes, eyePaths: paths, cavityResolution: cache.resolution
+          eyes: p.eyes && paths.length > 0, eyeMode: p.eyeMode, eyeCount: paths.length, eyePaths: paths, cavityResolution: cache.resolution
         };
         return output;
       } finally { if (result !== cache.shell) result.delete(); cutters.forEach(c => c.delete()); }

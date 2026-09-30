@@ -27,6 +27,10 @@ In **Hollow & eyes**, enable **Hollow interior** and enter the wall thickness in
 
 **Add see-through eyes** automatically enables hollowing. Choose round eyes (diameter) or oval eyes (width and height), adjust center-to-center spacing, height as a percentage of the finished ghost, and face direction. At 0° the face points toward −Y; 90° faces +X. The holes open only the front wall into the cavity. If an opening cannot fit fully over the cavity without reaching the rear wall, generation stops with adjustment guidance and export stays disabled. Turning off hollowing also turns off eyes.
 
+Enable **Place eyes by clicking** to switch from the original symmetric pair to free placement. Set the shape and size for the next eye, orbit to the desired view, and click the ghost. A cursor outline previews the brush. Each click projects a circular/oval bore along that click's camera ray, with the oval aligned to the screen. Its dimensions are millimetres in the plane perpendicular to that ray; a sloping surface can stretch the visible opening. There is no fixed limit on the number of eyes, and each retains its own size and direction when the camera or brush settings change.
+
+Drag to orbit as usual; right-drag pans and scrolling zooms. Clicks on empty space or through an existing opening do nothing. Placement pauses during regeneration, and works in Ghost or Overlay view. Use **Undo last**, **Clear all**, or each eye's **Remove** button to edit the list. Switching the toggle off restores the original pair and keeps the placed-eye list for when you switch back. Loading a new source clears it. Placements are stored in scene coordinates, so changing the underlying ghost shape may require removing/replacing an eye that no longer fits.
+
 ## Geometry algorithm
 
 1. Clone and transform the source, center it in XY and ground it at Z=0.
@@ -49,6 +53,8 @@ STL parsing, generation and validation run in a dedicated Web Worker. Requests a
 - `src/meshUtils.js`: orientation and solid validation.
 - `src/solidProcessor.js`: async `createSolidProcessor()` initializes Manifold; its `process(outerGeometry, parameters)` returns a new hollow/eye-cut geometry. Call `clear()` to release cached WASM solids. Distance-grid spacing and its allocation guard live here.
 - `src/solidParameters.js`: hollow and eye defaults, separate from envelope generation parameters.
+- `src/eyeProjection.js`: serializable world-space eye frames and per-click shape/size snapshots.
+- `src/eyePlacementTool.js`: accelerated scene picking, brush outline, and click-versus-drag handling. `eyeMode: 'placed'` uses the `placedEyes` array of `{point, direction, up, shape, width, height}`; `'paired'` keeps the original slider controls.
 - `src/generation.worker.js`: STL processing and background generation.
 - `src/viewer.js`: Z-up Three.js viewport, source clipping, diagnostics and OrbitControls.
 - `src/main.js` and `src/ui.js`: state, input handling and UI.
@@ -59,7 +65,7 @@ The easiest code parameters to tune are `angularSamples` (128), `verticalSamples
 
 - This is a stylized, convex horizontal envelope, not a physical drape or a fitted cover for the source. Smoothing can move the surface inside parts of the original. Solid mode remains the default; hollow mode insets the generated ghost, not the uploaded source.
 - Wall thickness is a nominal Euclidean inset, approximated by the cavity's triangle mesh. Curved regions and tight folds have small sampling deviations; narrow features can remain solid. Very thin walls on large models exceed a bounded sampling budget and produce an instruction to increase thickness instead of exhausting browser memory.
-- Eyes are a symmetric pair of straight circular/elliptical bores. Large holes near a thin roof, narrow neck, or folds may not fit; reduce their size/spacing, move them, or reduce wall thickness. The app does not automatically relocate invalid holes or silently create blind recesses.
+- Eyes are straight circular/elliptical bores, either a symmetric pair or individually projected from camera clicks. Large or grazing-angle holes near a thin roof, narrow neck, or folds may not fit; reduce their size, move them, or reduce wall thickness. A rejected click identifies the eye to undo/remove. The app does not automatically relocate invalid holes or silently create blind recesses. Overlapping cuts can merge into one opening; large placement counts increase boolean processing time.
 - Each height has one contour and the top has one rounded closure. Separate ears/horns are bridged; narrow features can be softened away. Strongly concave, sideways or branching models may lose recognizability.
 - At 100% cutoff the algorithm uses a thin band at 99.5% height. Perfectly flat inputs are rejected; nearly flat ones trigger a warning. Very small models may need lower clearance/fold depth.
 - Larger meshes can take seconds and considerable memory. Files are limited to 120 MB and 2 million triangles. A BVH accelerates hollowing; source contour slicing still has no decimation. The worker keeps geometry processing off the main thread, but the first hollowing pass can take several seconds.
@@ -74,8 +80,8 @@ npm test
 npm run build
 ```
 
-Tests cover deterministic generation, manifold edge incidence and winding, zero-area triangles, exact bottom planarity, binary STL export/import (including hollow folded models with eyes), orientation, disconnected source sections, parameter extremes and invalid inputs. Hollow tests measure wall/floor thickness, check open underside access, distinguish round from oval holes, and trace rays to confirm the eyes reach the cavity while the back remains intact.
+Tests cover deterministic generation, manifold edge incidence and winding, zero-area triangles, exact bottom planarity, binary STL export/import (including hollow folded models with eyes), orientation, disconnected source sections, parameter extremes and invalid inputs. Hollow tests measure wall/floor thickness, check open underside access, distinguish round from oval holes, and trace rays to confirm the eyes reach the cavity while the back remains intact. Placement tests cover zero, one, and seven independent openings, tilted camera rays, preserved per-eye dimensions, and actionable invalid-placement errors.
 
-With the dev server running, `npm run test:browser` runs a real Chrome smoke test for upload, orientation, live changes, hollowing, both eye shapes, floor options, export, invalid file/eye recovery and mobile layout. It also validates the actual downloaded hollow STL. It defaults to the Windows Chrome installation; set `CHROME_PATH` for another installation and `APP_URL` for a different server URL. Screenshots and downloaded fixtures go into the ignored `artifacts/` folder.
+With the dev server running, `npm run test:browser` runs a real Chrome smoke test for upload, orientation, live changes, hollowing, both eye shapes, floor options, export, invalid file/eye recovery and mobile layout. It exercises real scene clicks, multiple eyes, brush settings, orbit/miss/opening filtering, switching placement modes, undo/remove/clear, and validates downloaded hollow and click-placed STLs. It defaults to the Windows Chrome installation; set `CHROME_PATH` for another installation and `APP_URL` for a different server URL. Screenshots and downloaded fixtures go into the ignored `artifacts/` folder.
 
 Geometry API references: [Manifold](https://manifoldcad.org/docs/jsuser/classes/Manifold.html), [WASM initialization and memory management](https://manifoldcad.org/docs/jsapi/documents/Using_Manifold.html), and [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh).
