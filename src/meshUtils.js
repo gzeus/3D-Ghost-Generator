@@ -16,11 +16,15 @@ export function validateSolid(geometry) {
   const indices = geometry.index?.array;
   if (!indices) throw new Error('Expected indexed geometry.');
   const edges = new Map();
+  const positions = new Set();
   let volume = 0, minZ = Infinity, maxZ = -Infinity;
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const ab = new THREE.Vector3(), ac = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     if (![p.getX(i), p.getY(i), p.getZ(i)].every(Number.isFinite)) throw new Error('Non-finite vertex.');
+    const position = `${p.getX(i)},${p.getY(i)},${p.getZ(i)}`;
+    if (positions.has(position)) throw new Error('Coincident surface vertices would pinch the exported STL. Try a slightly different thickness or smoothing.');
+    positions.add(position);
     minZ = Math.min(minZ, p.getZ(i)); maxZ = Math.max(maxZ, p.getZ(i));
   }
   for (let i = 0; i < indices.length; i += 3) {

@@ -1,10 +1,13 @@
 // Optional real-browser smoke test, using Chrome's DevTools protocol (no test dependencies).
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { validateSolid } from '../src/meshUtils.js';
 
 const artifacts = path.resolve('artifacts');
 await mkdir(artifacts, { recursive: true });
@@ -30,7 +33,7 @@ try {
   });
   const send = (method, params = {}) => new Promise((resolve, reject) => { const id = ++sequence; const timeout = setTimeout(() => reject(new Error(`CDP timeout: ${method}; ${chromeLog}`)), 20000); waiting.set(id, { resolve: value => { clearTimeout(timeout); resolve(value); }, reject: error => { clearTimeout(timeout); reject(error); } }); socket.send(JSON.stringify({ id, method, params })); });
   const evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails)); return r.result.value; };
-  const waitFor = async expression => { for (let i = 0; i < 150; i++) { if (await evaluate(expression)) return; await sleep(100); } throw new Error(`Timed out: ${expression}; status ${await evaluate('document.body.innerText')}`); };
+  const waitFor = async expression => { for (let i = 0; i < 300; i++) { if (await evaluate(expression)) return; await sleep(100); } throw new Error(`Timed out: ${expression}; status ${await evaluate('document.body.innerText')}`); };
   await send('Runtime.enable'); await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: artifacts });
@@ -39,6 +42,35 @@ try {
   assert.match(await evaluate('document.querySelector("#status").textContent'), /Watertight/);
   await sleep(800);
   const shot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'desktop.png'), Buffer.from(shot.data, 'base64'));
+  await evaluate('document.querySelector("#eyes").click()');
+  assert.equal(await evaluate('document.querySelector("#hollow").checked'), true);
+  assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#output-note").textContent'), /2 mm walls.*open underside.*eye openings/);
+  await evaluate('document.querySelector("#hollow").scrollIntoView({block:"start"})');
+  await sleep(300);
+  const hollowShot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'hollow-eyes.png'), Buffer.from(hollowShot.data, 'base64'));
+  await rm(path.join(artifacts, 'rabbit_ghost.stl'), { force: true });
+  await evaluate('document.querySelector("#export").click()');
+  for (let i = 0; i < 50 && !(await readdir(artifacts)).includes('rabbit_ghost.stl'); i++) await sleep(100);
+  const downloadedHollow = await readFile(path.join(artifacts, 'rabbit_ghost.stl'));
+  const hollowGeometry = new STLLoader().parse(downloadedHollow.buffer.slice(downloadedHollow.byteOffset, downloadedHollow.byteOffset + downloadedHollow.byteLength));
+  hollowGeometry.deleteAttribute('normal');
+  assert.equal(validateSolid(mergeVertices(hollowGeometry, 1e-6)).watertight, true);
+  await evaluate('document.querySelector("#eyeShape").value="round"; document.querySelector("#eyeShape").dispatchEvent(new Event("change"));');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.equal(await evaluate('document.querySelector("#eyeHeight-row").hidden'), true);
+  await evaluate('document.querySelector("#openBottom").click(); document.querySelector("#wallThickness").value=2.5; document.querySelector("#wallThickness").dispatchEvent(new Event("input"));');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#output-note").textContent'), /2.5 mm walls.*closed floor/);
+  await evaluate('document.querySelector("#eyeSpacing").value=1; document.querySelector("#eyeSpacing").dispatchEvent(new Event("input"));');
+  await waitFor('!document.querySelector("#notice").hidden');
+  assert.match(await evaluate('document.querySelector("#notice").textContent'), /spacing/);
+  assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
+  await evaluate('document.querySelector("#hollow").click()');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.equal(await evaluate('document.querySelector("#eyes").checked'), false);
+  await evaluate('document.querySelector(".sidebar").scrollTop=0');
   await evaluate('document.querySelector("#foldCount").value = 12; document.querySelector("#foldCount").dispatchEvent(new Event("input"));');
   assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
   await waitFor('!document.querySelector("#export").disabled');
@@ -70,6 +102,6 @@ try {
   assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true);
   const mobile = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'mobile.png'), Buffer.from(mobile.data, 'base64'));
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
-  console.log('Browser checks passed: demo, live updates, orientation, preview modes, upload, export, invalid STL recovery, mobile layout.');
+  console.log('Browser checks passed: hollowing, round/oval eyes, wall thickness, open/closed floor, hollow STL round trip, invalid eye settings, demo, live updates, orientation, preview modes, upload, export, invalid STL recovery, mobile layout.');
   await send('Browser.close');
 } finally { socket?.close(); chrome.kill(); }

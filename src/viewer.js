@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { orientGeometry } from './meshUtils.js';
 
 export function createViewer(container) {
@@ -64,9 +65,12 @@ export function createViewer(container) {
     setSource(geometry) { original?.dispose(); original = geometry; lastRotation = undefined; },
     orient,
     setGhost(geometry) {
-      ghostMesh.geometry.dispose(); ghostMesh.geometry = geometry;
+      ghostMesh.geometry.dispose();
+      // Keep Boolean rims crisp while the cloth itself remains smoothly shaded.
+      ghostMesh.geometry = geometry.userData.hollow ? toCreasedNormals(geometry, Math.PI / 4) : geometry.clone();
       removeDebug(contourLines); removeDebug(samplePoints);
-      const points = geometry.attributes.position, { ringCount, angularSamples: n, sampled } = geometry.userData;
+      const { ringCount, angularSamples: n, sampled, contourPositions } = geometry.userData;
+      const points = contourPositions ? new THREE.BufferAttribute(contourPositions, 3) : geometry.attributes.position;
       const lines = [];
       for (let l = 0; l < ringCount; l += 3) for (let i = 0; i < n; i++) for (const j of [l * n + i, l * n + (i + 1) % n]) lines.push(points.getX(j), points.getY(j), points.getZ(j));
       contourLines = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)), new THREE.LineBasicMaterial({ color: '#67d9a4', transparent: true, opacity: 0.7 })); scene.add(contourLines);

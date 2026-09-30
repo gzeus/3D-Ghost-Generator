@@ -1,6 +1,6 @@
 # Sheet / Ghost Studio
 
-A small, browser-only modelling utility that turns an STL into a solid sheet ghost. Built with Vite, vanilla JavaScript and Three.js. No cloth physics, accounts, remote processing or file uploads. Runtime assets are bundled locally; the app does not load fonts or scripts from a CDN.
+A small, browser-only modelling utility that turns an STL into a solid or hollow sheet ghost with optional see-through eyes. Built with Vite, vanilla JavaScript, Three.js, and a locally bundled Manifold WASM boolean engine. No cloth physics, accounts, remote processing or file uploads. Runtime assets are bundled locally; the app does not load fonts or scripts from a CDN.
 
 ## Run
 
@@ -21,6 +21,12 @@ The rabbit example loads immediately. Drop an STL or browse for one, then use th
 
 Export writes only the generated solid as binary `originalname_ghost.stl`. The developer view exposes raw section points, generated rings, cutoff plane, bounding box and wireframe.
 
+### Hollow interior and eyes
+
+In **Hollow & eyes**, enable **Hollow interior** and enter the wall thickness in millimetres (default 2 mm). **Open underside** is on by default: the inner and outer surfaces join at a planar bottom rim. Turn it off to keep a floor with the same nominal thickness as the walls. Both modes export a closed, manifold boundary of the printable material; an open underside is not an unconnected mesh edge.
+
+**Add see-through eyes** automatically enables hollowing. Choose round eyes (diameter) or oval eyes (width and height), adjust center-to-center spacing, height as a percentage of the finished ghost, and face direction. At 0° the face points toward −Y; 90° faces +X. The holes open only the front wall into the cavity. If an opening cannot fit fully over the cavity without reaching the rear wall, generation stops with adjustment guidance and export stays disabled. Turning off hollowing also turns off eyes.
+
 ## Geometry algorithm
 
 1. Clone and transform the source, center it in XY and ground it at Z=0.
@@ -29,7 +35,9 @@ Export writes only the generated solid as binary `originalname_ghost.stl`. The d
 4. Smooth radii circumferentially and vertically, smooth section centers, and add clearance in millimetres. This intentionally removes cavities and small detail to produce a loose envelope.
 5. **The first smoothed upper contour is the skirt transition.** `skirtGenerator.js` extends that contour downward with 36 rings. Below this join, it never consults the source. Spread grows as `t^1.5`; fold strength uses a smoothstep. Periodic, deterministic phase and amplitude modulation introduce irregularity and asymmetry without a seam or per-vertex noise.
 6. Close the top with 14 shrinking elliptical rings and one apex. Close the exact Z=0 bottom ring with a consistently wound triangle fan. Positive radii and increasing ring heights keep the cross sections simple and the surface free of folds crossing themselves.
-7. Recalculate normals and validate finite vertices, nonzero triangle areas, two opposite uses of every edge, positive signed volume, and a grounded base. Only validated meshes become exportable.
+7. Optionally generate an inner cavity from a signed Euclidean-distance field of the outer surface, accelerated with `three-mesh-bvh`. Manifold's level-set mesher approximates the inset in real millimetres. For an open bottom, distance measurements exclude the original floor and the cavity extends below Z=0. For a closed floor, the distance field includes the floor.
+8. Subtract the cavity with Manifold. Subtract 96-sided circular or elliptical cylinder cutters for the eyes. Sample the cavity across each opening to find a cut depth inside it, preserving the rear wall. The outer shape and cavity are cached separately, so eye adjustments reuse the cavity. Coincident inner-surface vertex fans are separated at micron scale before booleans to avoid STL weld pinches; tiny boolean slivers are simplified before export.
+9. Recalculate normals and validate finite and distinct vertex positions, nonzero triangle areas, two opposite uses of every edge, positive signed volume, and a grounded base. Only validated meshes become exportable. The preview uses separate creased normals so eye rims look crisp without changing the export topology.
 
 STL parsing, generation and validation run in a dedicated Web Worker. Requests are coalesced and stale results discarded, keeping the UI responsive while it computes. Source geometry stays in the worker between updates.
 
@@ -39,6 +47,8 @@ STL parsing, generation and validation run in a dedicated Web Worker. Requests a
 - `src/contourSampler.js`: triangle slicing, convex sections, interpolation and smoothing. Change the `36` smoothing pass multiplier to alter smoothing strength.
 - `src/skirtGenerator.js`: nonlinear spread, deterministic fold modulation and radius safety floor. Change the `0.75` spread multiplier or ring count here.
 - `src/meshUtils.js`: orientation and solid validation.
+- `src/solidProcessor.js`: async `createSolidProcessor()` initializes Manifold; its `process(outerGeometry, parameters)` returns a new hollow/eye-cut geometry. Call `clear()` to release cached WASM solids. Distance-grid spacing and its allocation guard live here.
+- `src/solidParameters.js`: hollow and eye defaults, separate from envelope generation parameters.
 - `src/generation.worker.js`: STL processing and background generation.
 - `src/viewer.js`: Z-up Three.js viewport, source clipping, diagnostics and OrbitControls.
 - `src/main.js` and `src/ui.js`: state, input handling and UI.
@@ -47,10 +57,12 @@ The easiest code parameters to tune are `angularSamples` (128), `verticalSamples
 
 ## Limitations
 
-- This is a stylized, convex horizontal envelope, not a physical drape or exact offset. Smoothing can move the surface inside parts of the original. It is not a fitted hollow cover; the exported shape is a filled solid.
+- This is a stylized, convex horizontal envelope, not a physical drape or a fitted cover for the source. Smoothing can move the surface inside parts of the original. Solid mode remains the default; hollow mode insets the generated ghost, not the uploaded source.
+- Wall thickness is a nominal Euclidean inset, approximated by the cavity's triangle mesh. Curved regions and tight folds have small sampling deviations; narrow features can remain solid. Very thin walls on large models exceed a bounded sampling budget and produce an instruction to increase thickness instead of exhausting browser memory.
+- Eyes are a symmetric pair of straight circular/elliptical bores. Large holes near a thin roof, narrow neck, or folds may not fit; reduce their size/spacing, move them, or reduce wall thickness. The app does not automatically relocate invalid holes or silently create blind recesses.
 - Each height has one contour and the top has one rounded closure. Separate ears/horns are bridged; narrow features can be softened away. Strongly concave, sideways or branching models may lose recognizability.
 - At 100% cutoff the algorithm uses a thin band at 99.5% height. Perfectly flat inputs are rejected; nearly flat ones trigger a warning. Very small models may need lower clearance/fold depth.
-- Larger meshes can take seconds and considerable memory. Files are limited to 120 MB and 2 million triangles. The worker prevents UI blocking, but there is no BVH, decimation or progress estimate yet.
+- Larger meshes can take seconds and considerable memory. Files are limited to 120 MB and 2 million triangles. A BVH accelerates hollowing; source contour slicing still has no decimation. The worker keeps geometry processing off the main thread, but the first hollowing pass can take several seconds.
 - Arbitrarily corrupt or adversarial STL data is not repaired. This app validates generated topology, not all source mesh defects or printer-specific constraints.
 - Extreme folds on small models clamp inward radii to avoid self-intersections; reduce fold depth if the skirt looks pinched. Very high cutoffs can create densely spaced triangles.
 - Topology and STL round trips are covered by automated tests. Actual printing, support requirements, and PrusaSlicer inspection still require a human check for the chosen model/printer.
@@ -62,6 +74,8 @@ npm test
 npm run build
 ```
 
-Tests cover deterministic generation, manifold edge incidence and winding, zero-area triangles, exact bottom planarity, binary STL export/import, orientation, disconnected source sections, parameter extremes and invalid inputs.
+Tests cover deterministic generation, manifold edge incidence and winding, zero-area triangles, exact bottom planarity, binary STL export/import (including hollow folded models with eyes), orientation, disconnected source sections, parameter extremes and invalid inputs. Hollow tests measure wall/floor thickness, check open underside access, distinguish round from oval holes, and trace rays to confirm the eyes reach the cavity while the back remains intact.
 
-With the dev server running, `npm run test:browser` runs a real Chrome smoke test for upload, orientation, live changes, export, invalid file recovery and mobile layout. It defaults to the Windows Chrome installation; set `CHROME_PATH` for another installation and `APP_URL` for a different server URL. Screenshots and downloaded fixtures go into the ignored `artifacts/` folder.
+With the dev server running, `npm run test:browser` runs a real Chrome smoke test for upload, orientation, live changes, hollowing, both eye shapes, floor options, export, invalid file/eye recovery and mobile layout. It also validates the actual downloaded hollow STL. It defaults to the Windows Chrome installation; set `CHROME_PATH` for another installation and `APP_URL` for a different server URL. Screenshots and downloaded fixtures go into the ignored `artifacts/` folder.
+
+Geometry API references: [Manifold](https://manifoldcad.org/docs/jsuser/classes/Manifold.html), [WASM initialization and memory management](https://manifoldcad.org/docs/jsapi/documents/Using_Manifold.html), and [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh).

@@ -25,14 +25,33 @@ export function renderUI() {
           ${slider('foldIrregularity', 'Fold irregularity', 0, 100, 20)}
           ${slider('asymmetry', 'Asymmetry', 0, 100, 15)}
         </section>
+        <section><div class="section-title"><h2><span>04</span> Hollow & eyes</h2><span class="section-hint">LET THE LIGHT IN</span></div>
+          <label class="feature-toggle"><input id="hollow" type="checkbox"/> Hollow interior</label>
+          <fieldset id="hollow-controls" disabled>
+            <label class="dimension-control" for="wallThickness"><span>Wall thickness</span><span><input id="wallThickness" type="number" min="0.4" max="30" step="0.1" value="2"/> mm</span></label>
+            <label class="feature-toggle"><input id="openBottom" type="checkbox" checked/> Open underside</label>
+            <p class="control-help">Leave the bottom open, or keep a floor with the same thickness. The contact edge stays flat.</p>
+          </fieldset>
+          <label class="feature-toggle eye-toggle"><input id="eyes" type="checkbox"/> Add see-through eyes</label>
+          <p class="control-help">Enables a hollow interior. Openings cut through the front wall into the cavity.</p>
+          <fieldset id="eye-controls" disabled>
+            <label class="dimension-control" for="eyeShape"><span>Eye shape</span><select id="eyeShape"><option value="oval">Oval</option><option value="round">Round</option></select></label>
+            <label class="dimension-control" for="eyeWidth"><span id="eyeWidth-label">Eye width</span><span><input id="eyeWidth" type="number" min="0.5" max="100" step="0.5" value="6"/> mm</span></label>
+            <label class="dimension-control" for="eyeHeight" id="eyeHeight-row"><span>Eye height</span><span><input id="eyeHeight" type="number" min="0.5" max="100" step="0.5" value="9"/> mm</span></label>
+            <label class="dimension-control" for="eyeSpacing"><span>Eye spacing <small>Center to center</small></span><span><input id="eyeSpacing" type="number" min="1" max="250" step="0.5" value="13"/> mm</span></label>
+            ${slider('eyeLevel', 'Eye position · height', 10, 95, 65)}
+            ${slider('eyeAngle', 'Face direction', -180, 180, 0, '°')}
+            <p class="control-help">0° faces forward (−Y). Rotate the face around the ghost to choose another side.</p>
+          </fieldset>
+        </section>
         <details class="debug"><summary>Developer view <span>+</span></summary><div>${[['points','Sampled contour points'],['rings','Generated contour rings'],['plane','Cutoff plane'],['box','Source bounding box'],['wireframe','Ghost wireframe']].map(([key, label]) => `<label><input type="checkbox" data-debug="${key}" ${key === 'plane' ? 'checked' : ''}>${label}</label>`).join('')}</div></details>
-        <div class="output"><button id="generate" class="secondary-button">↻ Update ghost</button><button id="export" class="primary-button" disabled>↓ Export STL</button><p>A closed solid. A flat base. Ready for your slicer.</p></div>
+        <div class="output"><button id="generate" class="secondary-button">↻ Update ghost</button><button id="export" class="primary-button" disabled>↓ Export STL</button><p id="output-note">A closed solid. A flat base. Ready for your slicer.</p></div>
       </aside>
       <div class="workspace">
         <div class="viewport-top"><div><span class="eyebrow">THE WORKBENCH</span><h2>Your next friendly haunting.</h2></div><span class="version">PROCEDURAL / V1.0</span></div>
         <div class="view-toolbar"><div class="segmented" aria-label="Preview mode">${['ghost','source','overlay'].map(mode => `<button data-mode="${mode}" class="${mode === 'ghost' ? 'active' : ''}" aria-pressed="${mode === 'ghost'}">${mode[0].toUpperCase() + mode.slice(1)}</button>`).join('')}</div><button id="fit" class="fit-button">⛶ <span>Fit camera</span></button></div>
         <div id="viewport" aria-label="Interactive 3D preview"></div>
-        <div class="viewport-caption"><span class="caption-mark">↳</span><div><strong>Soft folds. Solid inside.</strong><span>A procedural sheet, made for the real world.</span></div></div>
+        <div class="viewport-caption"><span class="caption-mark">↳</span><div><strong id="model-caption">Soft folds. Solid inside.</strong><span>A procedural sheet, made for the real world.</span></div></div>
         <div class="viewport-bottom"><label class="toggle-label"><input id="show-source" type="checkbox"/> Show source</label><span>Drag to orbit <b>·</b> Scroll to zoom <b>·</b> Right-drag to pan</span><div class="axis"><span>Z ↑</span><small>mm</small></div></div>
         <div class="statusbar"><div id="status" role="status" aria-live="polite"><i></i> Preparing your ghost…</div><div id="mesh-stats">—</div></div>
         <div class="notice" id="notice" role="alert" hidden></div>

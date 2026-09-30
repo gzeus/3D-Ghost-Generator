@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { renderUI } from './ui.js';
 import { createViewer } from './viewer.js';
 import { defaults } from './ghostGenerator.js';
+import { solidDefaults } from './solidParameters.js';
 import { exportSTL } from './exportSTL.js';
 import './style.css';
 
@@ -12,11 +13,14 @@ try { viewer = createViewer($('viewport')); viewer.start(); }
 catch (error) { $('notice').hidden = false; $('notice').textContent = 'The 3D preview needs WebGL. Enable hardware acceleration or try a WebGL-capable browser.'; throw error; }
 let worker, sourceReady = false, busy = false, revision = 0, pending = false, ghost, timer, fitNext = true, filename = 'rabbit', sourceSize;
 const rotation = () => ['x', 'y', 'z'].map(a => Number($(`rotate-${a}`).value) || 0);
-const normalized = new Set(['cutoff', 'smoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry']);
+const normalized = new Set(['cutoff', 'smoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry', 'eyeLevel']);
 function parameters() {
-  const p = { ...defaults };
+  const p = { ...defaults, ...solidDefaults };
   document.querySelectorAll('input[type=range]').forEach(input => { p[input.id] = Number(input.value) / (normalized.has(input.id) ? 100 : 1); });
   p.skirtHeight = $('skirtHeight').value === '' ? null : Number($('skirtHeight').value);
+  for (const key of ['hollow', 'openBottom', 'eyes']) p[key] = $(key).checked;
+  for (const key of ['wallThickness', 'eyeWidth', 'eyeHeight', 'eyeSpacing']) p[key] = Number($(key).value);
+  p.eyeShape = $('eyeShape').value;
   return p;
 }
 function status(message, state = '') { $('status').className = state; $('status').replaceChildren(); const dot = document.createElement('i'); $('status').append(dot, document.createTextNode(message)); }
@@ -44,6 +48,7 @@ function newWorker() {
   worker = new Worker(new URL('./generation.worker.js', import.meta.url), { type: 'module' });
   worker.onerror = () => { busy = false; sourceReady = false; status('Processing interrupted', 'error'); notice('The browser could not process this mesh. Try a smaller STL or reload the example.'); };
   worker.onmessage = ({ data }) => {
+    if (data.type === 'progress') { if (data.id === revision) status(data.message, 'busy'); return; }
     if (data.type === 'loaded') {
       const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(data.positions, 3)); geometry.computeVertexNormals();
       viewer.setSource(geometry); sourceReady = true; updateSource(); viewer.fit(); generate(); return;
@@ -54,11 +59,14 @@ function newWorker() {
       status('Could not generate ghost', 'error'); notice(data.message); return;
     }
     if (data.id !== revision) { generate(); return; }
+    ghost?.dispose();
     ghost = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     ghost.setIndex(new THREE.BufferAttribute(data.indices, 1)); ghost.computeVertexNormals(); ghost.userData = data.debug;
     viewer.setGhost(ghost); if (fitNext) { viewer.fit(); fitNext = false; }
     $('export').disabled = false;
-    status('Watertight · flat base verified');
+    status(data.debug.hollow ? 'Manifold shell · flat base verified' : 'Watertight · flat base verified');
+    $('model-caption').textContent = data.debug.hollow ? 'Soft folds. Hollow inside.' : 'Soft folds. Solid inside.';
+    $('output-note').textContent = data.debug.hollow ? `${data.debug.wallThickness} mm walls · ${data.debug.openBottom ? 'open underside' : 'closed floor'}${data.debug.eyes ? ' · eye openings' : ''}` : 'A closed solid. A flat base. Ready for your slicer.';
     $('mesh-stats').textContent = `${data.stats.triangles.toLocaleString()} triangles · ${data.stats.height.toFixed(1)} mm tall`;
     if (data.flat) notice('This source is very flat. Rotate it upright or increase the skirt height for a more recognizable ghost.');
     if (parameters().cutoff === 1) notice('At 100%, a thin band just below the highest point is used to keep the envelope stable.');
@@ -85,6 +93,20 @@ document.querySelectorAll('input[type=range]').forEach(input => {
 });
 ['x','y','z'].forEach(a => $(`rotate-${a}`).addEventListener('input', () => invalidate(true)));
 $('skirtHeight').addEventListener('input', () => invalidate());
+function syncSolidControls() {
+  $('hollow-controls').disabled = !$('hollow').checked;
+  $('eye-controls').disabled = !$('eyes').checked;
+  const round = $('eyeShape').value === 'round';
+  $('eyeHeight-row').hidden = round;
+  $('eyeHeight').disabled = round;
+  $('eyeWidth-label').textContent = round ? 'Eye diameter' : 'Eye width';
+}
+$('hollow').addEventListener('change', () => { if (!$('hollow').checked) $('eyes').checked = false; syncSolidControls(); invalidate(); });
+$('eyes').addEventListener('change', () => { if ($('eyes').checked) $('hollow').checked = true; syncSolidControls(); invalidate(); });
+$('openBottom').addEventListener('change', () => invalidate());
+$('eyeShape').addEventListener('change', () => { syncSolidControls(); invalidate(); });
+for (const key of ['wallThickness', 'eyeWidth', 'eyeHeight', 'eyeSpacing']) $(key).addEventListener('input', () => invalidate());
+syncSolidControls();
 $('reset').addEventListener('click', () => { ['x','y','z'].forEach(a => { $(`rotate-${a}`).value = 0; }); invalidate(true); });
 $('generate').addEventListener('click', generate);
 $('fit').addEventListener('click', () => viewer.fit());
