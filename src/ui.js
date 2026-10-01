@@ -5,13 +5,13 @@ export function renderUI() {
     <header class="app-header"><a class="brand" href="./">${icon}<span>sheet<span class="brand-dot">/</span><small>GHOST STUDIO</small></span></a><div class="header-note">A little shape. A little mystery.</div><span class="local-badge"><i></i> LOCAL BY DESIGN</span></header>
     <main>
       <aside class="sidebar">
-        <div class="intro"><span class="eyebrow">FROM MESH TO MYSTERY</span><h1>Give it a sheet.</h1><p>Turn any STL into a ghost worth printing.</p></div>
+        <div class="intro"><span class="eyebrow">FROM MESH TO MYSTERY</span><h1>Give it a sheet.</h1><p>Turn your model into a ghost worth printing.</p></div>
         <section><div class="section-title"><h2><span>01</span> Source</h2><button class="text-button" id="demo">Try example ↗</button></div>
-          <label class="upload" id="drop-zone" for="file"><span class="upload-icon">↥</span><strong>Drop your STL here</strong><span>or <u>browse files</u> · max. 120 MB</span><input id="file" type="file" accept=".stl" /></label>
+          <label class="upload" id="drop-zone" for="file"><span class="upload-icon">↥</span><strong>Drop STL, OBJ, or 3MF</strong><span>or <u>browse files</u> · max. 120 MB</span><input id="file" type="file" accept=".stl,.obj,.3mf" /></label>
           <div class="file-info"><span class="file-symbol">◇</span><div><strong id="filename">Rabbit example</strong><small id="source-details">Loading source…</small></div><span class="file-check">✓</span></div>
           <div class="label-row"><span>Orientation</span><button id="reset" class="text-button">Reset ↺</button></div>
           <div class="rotation-inputs">${['X', 'Y', 'Z'].map(axis => `<label><span>${axis}</span><input aria-label="${axis} rotation in degrees" id="rotate-${axis.toLowerCase()}" type="number" step="5" min="-360" max="360" value="0"/><span>°</span></label>`).join('')}</div>
-          <label class="dimension-control" for="targetSize"><span>Target size <small>Longest side</small></span><span><input id="targetSize" type="number" min="0.1" step="1" placeholder="Original" aria-label="Target source size in millimetres along its longest side"/> mm</span></label>
+          <label class="dimension-control" for="targetSize"><span>Target size — height <small>Z axis</small></span><span><input id="targetSize" type="number" min="0.1" step="1" placeholder="Original" aria-label="Target source height along the Z axis in millimetres"/> mm</span></label>
           <div class="label-row"><span>All axes scale together</span><button id="reset-size" class="text-button" type="button">Original size ↺</button></div>
         </section>
         <section><div class="section-title"><h2><span>02</span> Sheet</h2><span class="section-hint">THE UPPER SILHOUETTE</span></div>

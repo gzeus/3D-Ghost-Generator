@@ -11,6 +11,8 @@
     "test:browser": "node tests/browser-smoke.mjs"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.11.2",
+    "fflate": "^0.8.3",
     "manifold-3d": "^3.5.4",
     "three": "^0.180.0",
     "three-mesh-bvh": "^0.9.15"

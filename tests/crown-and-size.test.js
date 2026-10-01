@@ -37,9 +37,9 @@ test('target size scales uniformly after orientation and keeps the source center
   const matrix = new THREE.Matrix4().makeRotationX(Math.PI / 2);
   const scaled = orientGeometry(original, matrix, 120);
   const box = scaled.boundingBox, size = box.getSize(new THREE.Vector3());
-  assert.ok(Math.abs(size.x - 30) < 1e-4);
-  assert.ok(Math.abs(size.y - 120) < 1e-4);
-  assert.ok(Math.abs(size.z - 60) < 1e-4);
+  assert.ok(Math.abs(size.x - 60) < 1e-4);
+  assert.ok(Math.abs(size.y - 240) < 1e-4);
+  assert.ok(Math.abs(size.z - 120) < 1e-4);
   assert.equal(box.min.z, 0); assert.equal(box.min.x + box.max.x, 0); assert.equal(box.min.y + box.max.y, 0);
   const restored = orientGeometry(original, matrix);
   assert.ok(Math.abs(restored.boundingBox.getSize(new THREE.Vector3()).y - 80) < 1e-4);

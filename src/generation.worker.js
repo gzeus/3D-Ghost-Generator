@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { importSTL, demoGeometry } from './stlImport.js';
+import { demoGeometry } from './stlImport.js';
+import { importModel } from './modelImport.js';
 import { generateGhost, defaults } from './ghostGenerator.js';
 import { orientGeometry, validateSolid } from './meshUtils.js';
 import { createSolidProcessor } from './solidProcessor.js';
@@ -9,7 +10,7 @@ let source, cachedOuter, outerKey, processor, processorPromise;
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'load') {
-      const next = data.buffer ? importSTL(data.buffer) : demoGeometry();
+      const next = data.buffer ? importModel(data.buffer, data.filename) : demoGeometry();
       source?.dispose(); source = next;
       cachedOuter?.dispose(); cachedOuter = undefined; outerKey = undefined; processor?.clear();
       const plain = source.index ? source.toNonIndexed() : source.clone();
@@ -17,7 +18,7 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ type: 'loaded', positions }, [positions.buffer]);
       return;
     }
-    if (!source) throw new Error('Load an STL first.');
+    if (!source) throw new Error('Load a source model first.');
     const matrix = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...data.rotation.map(THREE.MathUtils.degToRad), 'XYZ'));
     const key = JSON.stringify([data.rotation, Object.keys(defaults).map(k => data.params[k] ?? defaults[k])]);
     if (key !== outerKey) {

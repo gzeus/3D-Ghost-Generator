@@ -1,6 +1,6 @@
 # Sheet / Ghost Studio
 
-A small, browser-only modelling utility that turns an STL into a solid or hollow sheet ghost with optional see-through eyes. Built with Vite, vanilla JavaScript, Three.js, and a locally bundled Manifold WASM boolean engine. No cloth physics, accounts, remote processing or file uploads. Runtime assets are bundled locally; the app does not load fonts or scripts from a CDN.
+A small, browser-only modelling utility that turns an STL, OBJ, or 3MF model into a solid or hollow sheet ghost with optional see-through eyes. Built with Vite, vanilla JavaScript, Three.js, and a locally bundled Manifold WASM boolean engine. No cloth physics, accounts, remote processing or file uploads. Runtime assets are bundled locally; the app does not load fonts or scripts from a CDN.
 
 ## Run
 
@@ -15,9 +15,11 @@ Open the local URL printed by Vite. On Windows PowerShell with script restrictio
 
 ## Workflow
 
-The rabbit example loads immediately. Drop an STL or browse for one, then use the Source or Overlay view to orient it with X/Y/Z rotations. The model is centered in XY and placed on Z=0 after each orientation change. STL units are assumed to be millimetres.
+The rabbit example loads immediately. Drop an STL, OBJ, or 3MF file or browse for one, then use the Source or Overlay view to orient it with X/Y/Z rotations. The model is centered in XY and placed on Z=0 after each orientation change. STL and OBJ units are assumed to be millimetres; 3MF's declared units are converted to millimetres.
 
-Set **Target size** in Source to uniformly scale the model to a chosen longest bounding-box side in millimetres, measured after orientation. All three axes retain their proportions. Leave it blank or click **Original size** to restore the imported scale; a new upload resets it. The source dimensions, cutoff plane, and generated ghost use the same scale, and the camera refits after resizing. Clearance, wall thickness, eye dimensions, and fold depth remain absolute millimetres; the final ghost can be larger than the source target. Existing click-placed eyes retain scene coordinates, so resizing after placement may require repositioning them.
+Set **Target size — height** in Source to uniformly scale the model to a chosen **Z-axis height** in millimetres, measured after orientation. X/Y widths do not determine the scale, and all three axes retain their proportions. Rotating with a target height set recomputes the uniform scale so Z still matches the target. Leave it blank or click **Original size** to restore the imported scale; a new upload resets it. The source dimensions, cutoff plane, and generated ghost use the same scale, and the camera refits after resizing. Clearance, wall thickness, eye dimensions, and fold depth remain absolute millimetres; the final ghost can be taller than the source target. Existing click-placed eyes retain scene coordinates, so resizing after placement may require repositioning them.
+
+OBJ import combines polygon meshes from all objects/groups, including triangulated polygon faces and negative indices. MTL files and textures are unnecessary. 3MF import reads the printable root build, component assemblies, transforms, and embedded production-extension model parts; unused object resources and non-printable build items are excluded. It imports geometry only, ignoring colors, textures and slicer settings. The 3MF reader runs in the worker without browser DOM APIs or external resource requests. Supported geometry follows the [3MF core model/build structure](https://github.com/3MFConsortium/spec_core/blob/master/3MF%20Core%20Specification.md) and [embedded production component references](https://github.com/3MFConsortium/spec_production/blob/master/3MF%20Production%20Extension.md).
 
 “Use source above” is a height percentage: 58% uses the upper 42% of the model. The mint plane marks this height; geometry below it is dimmed in the source preview. Adjust clearance and smoothing, then spread, skirt height, folds and asymmetry. Leaving skirt height blank uses the cutoff height automatically. Controls regenerate after a 200 ms debounce. Export is disabled while the settings are awaiting a valid result.
 
@@ -45,7 +47,7 @@ Drag to orbit as usual; right-drag pans and scrolling zooms. Clicks on empty spa
 8. Subtract the cavity with Manifold. Subtract 96-sided circular or elliptical cylinder cutters for the eyes. Sample the cavity across each opening to find a cut depth inside it, preserving the rear wall. The outer shape and cavity are cached separately, so eye adjustments reuse the cavity. Coincident inner-surface vertex fans are separated at micron scale before booleans to avoid STL weld pinches; tiny boolean slivers are simplified before export.
 9. Recalculate normals and validate finite and distinct vertex positions, nonzero triangle areas, two opposite uses of every edge, positive signed volume, and a grounded base. Only validated meshes become exportable. The preview uses separate creased normals so eye rims look crisp without changing the export topology.
 
-STL parsing, generation and validation run in a dedicated Web Worker. Requests are coalesced and stale results discarded, keeping the UI responsive while it computes. Source geometry stays in the worker between updates.
+Model parsing, generation and validation run in a dedicated Web Worker. Requests are coalesced and stale results discarded, keeping the UI responsive while it computes. Source geometry stays in the worker between updates.
 
 ## Structure and tuning
 
@@ -58,11 +60,13 @@ STL parsing, generation and validation run in a dedicated Web Worker. Requests a
 - `src/solidParameters.js`: hollow and eye defaults, separate from envelope generation parameters.
 - `src/eyeProjection.js`: serializable world-space eye frames and per-click shape/size snapshots.
 - `src/eyePlacementTool.js`: accelerated scene picking, brush outline, and click-versus-drag handling. `eyeMode: 'placed'` uses the `placedEyes` array of `{point, direction, up, shape, width, height}`; `'paired'` keeps the original slider controls.
-- `src/generation.worker.js`: STL processing and background generation.
+- `src/modelImport.js`: STL/OBJ/3MF dispatch and common mesh normalization.
+- `src/threeMFImport.js`: worker-safe ZIP/XML mesh and assembly reader, unit conversion, and embedded-part resolution.
+- `src/generation.worker.js`: model processing and background generation.
 - `src/viewer.js`: Z-up Three.js viewport, source clipping, diagnostics and OrbitControls.
 - `src/main.js` and `src/ui.js`: state, input handling and UI.
 
-The easiest code parameters to tune are `angularSamples` (128), `verticalSamples` (60), smoothing passes, skirt ring count (36) and crown layers (28). `targetSize: null` preserves the source size; a positive value sets its longest oriented side in mm. Clearance and fold depth are absolute millimetres. `bottomSpread`, smoothing, irregularity and asymmetry are normalized 0–1; fold count is an integer. `skirtHeight: null` uses the cutoff height, with a minimum of 8% of source height to preserve a skirt when cutoff is zero.
+The easiest code parameters to tune are `angularSamples` (128), `verticalSamples` (60), smoothing passes, skirt ring count (36) and crown layers (28). `targetSize: null` preserves the source size; a positive value sets its oriented Z height in mm. Clearance and fold depth are absolute millimetres. `bottomSpread`, smoothing, irregularity and asymmetry are normalized 0–1; fold count is an integer. `skirtHeight: null` uses the cutoff height, with a minimum of 8% of source height to preserve a skirt when cutoff is zero.
 
 ## Limitations
 
@@ -73,6 +77,7 @@ The easiest code parameters to tune are `angularSamples` (128), `verticalSamples
 - At 100% cutoff the algorithm uses a thin band at 99.5% height. Perfectly flat inputs are rejected; nearly flat ones trigger a warning. Very small models may need lower clearance/fold depth.
 - Larger meshes can take seconds and considerable memory. Files are limited to 120 MB and 2 million triangles. A BVH accelerates hollowing; source contour slicing still has no decimation. The worker keeps geometry processing off the main thread, but the first hollowing pass can take several seconds.
 - Arbitrarily corrupt or adversarial STL data is not repaired. This app validates generated topology, not all source mesh defects or printer-specific constraints.
+- OBJ must contain polygon faces; point clouds and lines are not mesh sources. 3MF must contain printable triangle meshes: toolpath-only, volumetric-only, encrypted, or externally referenced models are unsupported. Geometry/XML parts are limited to 256 MB decompressed and assembled geometry to 2 million triangles. Missing parts, invalid references, or circular assemblies fail with an error rather than silently importing a partial model. Export is STL for every source format.
 - Extreme folds on small models clamp inward radii to avoid self-intersections; reduce fold depth if the skirt looks pinched. Very high cutoffs can create densely spaced triangles.
 - Topology and STL round trips are covered by automated tests. Actual printing, support requirements, and PrusaSlicer inspection still require a human check for the chosen model/printer.
 

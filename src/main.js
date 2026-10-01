@@ -53,7 +53,7 @@ function invalidate(reorient = false) {
 function newWorker() {
   worker?.terminate(); busy = false; pending = false; sourceReady = false;
   worker = new Worker(new URL('./generation.worker.js', import.meta.url), { type: 'module' });
-  worker.onerror = () => { busy = false; sourceReady = false; status('Processing interrupted', 'error'); notice('The browser could not process this mesh. Try a smaller STL or reload the example.'); };
+  worker.onerror = () => { busy = false; sourceReady = false; status('Processing interrupted', 'error'); notice('The browser could not process this mesh. Try a smaller model or reload the example.'); };
   worker.onmessage = ({ data }) => {
     if (data.type === 'progress') { if (data.id === revision) status(data.message, 'busy'); return; }
     if (data.type === 'loaded') {
@@ -84,7 +84,7 @@ function newWorker() {
 let loadToken = 0;
 async function load(file) {
   const token = ++loadToken;
-  if (file && (!/\.stl$/i.test(file.name) || file.size > 120 * 1024 * 1024)) { notice('Choose an STL file smaller than 120 MB.'); return; }
+  if (file && (!/\.(stl|obj|3mf)$/i.test(file.name) || file.size > 120 * 1024 * 1024)) { notice('Choose an STL, OBJ, or 3MF file smaller than 120 MB.'); return; }
   clearTimeout(timer); revision++; fitNext = true; $('export').disabled = true; notice(); status('Reading source locally…', 'busy');
   newWorker();
   placedEyes.length = 0; renderPlacedEyes(); syncSolidControls();
@@ -94,7 +94,7 @@ async function load(file) {
     filename = file?.name || 'rabbit.stl'; $('filename').textContent = file?.name || 'Rabbit example';
     ['x','y','z'].forEach(a => { $(`rotate-${a}`).value = 0; });
     $('targetSize').value = '';
-    worker.postMessage({ type: 'load', buffer }, buffer ? [buffer] : []);
+    worker.postMessage({ type: 'load', buffer, filename }, buffer ? [buffer] : []);
   } catch (error) { status('Could not read file', 'error'); notice(error.message); }
 }
 document.querySelectorAll('input[type=range]').forEach(input => {

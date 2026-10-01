@@ -6,9 +6,8 @@ export function orientGeometry(source, transform = new THREE.Matrix4(), targetSi
   geometry.computeBoundingBox();
   if (targetSize !== null) {
     const size = geometry.boundingBox.getSize(new THREE.Vector3());
-    const longest = Math.max(size.x, size.y, size.z);
-    if (!(longest > 0)) { geometry.dispose(); throw new Error('The source has no measurable size.'); }
-    const scale = targetSize / longest;
+    if (!(size.z > 0)) { geometry.dispose(); throw new Error('The source has no measurable Z height. Rotate it upright before setting a target height.'); }
+    const scale = targetSize / size.z;
     geometry.scale(scale, scale, scale); geometry.computeBoundingBox();
   }
   const box = geometry.boundingBox;
