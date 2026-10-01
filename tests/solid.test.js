@@ -87,7 +87,7 @@ test('folded hollow rabbit with eyes survives an STL round trip', () => {
 
 test('invalid thickness and eyes fail clearly instead of exporting blind recesses', () => {
   assert.throws(() => processor.process(outer, { hollow: true, wallThickness: 0 }), /thickness/);
-  assert.throws(() => processor.process(outer, { eyes: true }), /hollow interior/);
+  assert.throws(() => processor.process(outer, { hollow: false, eyes: true }), /hollow interior/);
   assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeSpacing: 2 }), /spacing/);
   assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeWidth: 35, eyeSpacing: 40 }), /interior|depth/);
   assert.throws(() => processor.process(outer, { hollow: true, wallThickness: 30 }), /interior/);

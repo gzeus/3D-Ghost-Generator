@@ -6,7 +6,7 @@ export function createEyePlacementTool(canvas, camera, scene, onPlace) {
   let config = {}, actual, outside, gesture;
   const pointers = new Set(), raycaster = new THREE.Raycaster();
   const outlineGeometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(64 * 3), 3));
-  const outline = new THREE.LineLoop(outlineGeometry, new THREE.LineBasicMaterial({ color: '#b9ebca', depthTest: false, transparent: true, opacity: 0.95 }));
+  const outline = new THREE.LineLoop(outlineGeometry, new THREE.LineBasicMaterial({ color: '#00ff40', depthTest: false, toneMapped: false }));
   outline.renderOrder = 10; outline.visible = false; scene.add(outline);
   const enabled = () => config.enabled && config.ready && config.visible;
   function pick(event) {

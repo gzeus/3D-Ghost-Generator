@@ -41,7 +41,12 @@ try {
   await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: artifacts });
   await send('Page.navigate', { url: process.env.APP_URL || 'http://127.0.0.1:5173' });
   await waitFor('document.querySelector("#export") && !document.querySelector("#export").disabled');
-  assert.match(await evaluate('document.querySelector("#status").textContent'), /Watertight/);
+  assert.match(await evaluate('document.querySelector("#status").textContent'), /Manifold shell/);
+  assert.equal(await evaluate('document.querySelector("#hollow").checked'), true);
+  assert.equal(await evaluate('document.querySelector(".viewport-top h2").textContent'), 'Watch out - the export is Spoooky!');
+  assert.equal(await evaluate('document.querySelector(".viewport-caption")'), null);
+  await evaluate(`window.exportAudioCalls = []; const originalPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () { window.exportAudioCalls.push(this); return originalPlay.call(this); };`);
   await sleep(800);
   const shot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'desktop.png'), Buffer.from(shot.data, 'base64'));
   assert.equal(await evaluate('document.querySelector("#filename").textContent'), 'benchy_example.stl');
@@ -71,6 +76,8 @@ try {
   const fixtureInput = await send('DOM.querySelector', { nodeId: fixtureDocument.root.nodeId, selector: '#file' });
   await send('DOM.setFileInputFiles', { nodeId: fixtureInput.nodeId, files: [path.join(artifacts, 'rabbit.stl')] });
   await waitFor('document.querySelector("#filename").textContent === "rabbit.stl" && !document.querySelector("#export").disabled');
+  await evaluate('document.querySelector("#hollow").click()');
+  await waitFor('!document.querySelector("#export").disabled');
   assert.equal(await evaluate('document.querySelector("#topSmoothing-value").textContent'), '35%');
   for (const value of [0, 100, 35]) {
     await evaluate(`document.querySelector("#topSmoothing").value=${value}; document.querySelector("#topSmoothing").dispatchEvent(new Event("input"));`);
@@ -99,6 +106,11 @@ try {
   await evaluate('document.querySelector("#export").click()');
   for (let i = 0; i < 50 && !(await readdir(artifacts)).includes('rabbit_ghost.stl'); i++) await sleep(100);
   const downloadedHollow = await readFile(path.join(artifacts, 'rabbit_ghost.stl'));
+  assert.equal(await evaluate('window.exportAudioCalls.length'), 1);
+  assert.match(await evaluate('window.exportAudioCalls[0].src'), /boo[1-4](?:-[\w-]+)?\.wav/);
+  assert.equal(await evaluate('window.exportAudioCalls[0].loop'), false);
+  await waitFor('window.exportAudioCalls[0].readyState >= 2');
+  assert.equal(await evaluate('window.exportAudioCalls[0].error'), null);
   const hollowGeometry = new STLLoader().parse(downloadedHollow.buffer.slice(downloadedHollow.byteOffset, downloadedHollow.byteOffset + downloadedHollow.byteLength));
   hollowGeometry.deleteAttribute('normal');
   assert.equal(validateSolid(mergeVertices(hollowGeometry, 1e-6)).watertight, true);

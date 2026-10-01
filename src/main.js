@@ -5,6 +5,10 @@ import { defaults } from './ghostGenerator.js';
 import { solidDefaults } from './solidParameters.js';
 import { exportSTL } from './exportSTL.js';
 import exampleURL from './assets/benchy_example.stl?url';
+import boo1URL from './assets/audio/boo1.wav?url';
+import boo2URL from './assets/audio/boo2.wav?url';
+import boo3URL from './assets/audio/boo3.wav?url';
+import boo4URL from './assets/audio/boo4.wav?url';
 import './style.css';
 
 renderUI();
@@ -14,6 +18,15 @@ try { viewer = createViewer($('viewport')); viewer.start(); }
 catch (error) { $('notice').hidden = false; $('notice').textContent = 'The 3D preview needs WebGL. Enable hardware acceleration or try a WebGL-capable browser.'; throw error; }
 let worker, sourceReady = false, busy = false, revision = 0, pending = false, ghost, timer, fitNext = true, filename = 'benchy_example.stl', sourceSize;
 const placedEyes = [];
+const exportSounds = [boo1URL, boo2URL, boo3URL, boo4URL];
+const exportAudio = new Audio();
+exportAudio.loop = false;
+function playExportSound() {
+  exportAudio.pause();
+  exportAudio.src = exportSounds[Math.floor(Math.random() * exportSounds.length)];
+  // Playback is optional: a browser audio restriction must not interrupt the export.
+  exportAudio.play().catch(() => {});
+}
 const rotation = () => ['x', 'y', 'z'].map(a => Number($(`rotate-${a}`).value) || 0);
 const normalized = new Set(['cutoff', 'smoothing', 'topSmoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry', 'eyeLevel']);
 function parameters() {
@@ -74,8 +87,7 @@ function newWorker() {
     $('export').disabled = false;
     syncPlacement();
     status(data.debug.hollow ? 'Manifold shell · flat base verified' : 'Watertight · flat base verified');
-    $('model-caption').textContent = data.debug.hollow ? 'Soft folds. Hollow inside.' : 'Soft folds. Solid inside.';
-    $('output-note').textContent = data.debug.hollow ? `${data.debug.wallThickness} mm walls · ${data.debug.openBottom ? 'open underside' : 'closed floor'}${data.debug.eyes ? ` · eye openings (${data.debug.eyeCount})` : ''}` : 'A closed solid. A flat base. Ready for your slicer.';
+    $('output-note').textContent = data.debug.hollow ? `${data.debug.wallThickness} mm walls · ${data.debug.openBottom ? 'open underside' : 'closed floor'}${data.debug.eyes ? ` · eye openings (${data.debug.eyeCount})` : ''}` : '';
     $('mesh-stats').textContent = `${data.stats.triangles.toLocaleString()} triangles · ${data.stats.height.toFixed(1)} mm tall`;
     if (data.flat) notice('This source is very flat. Rotate it upright or increase the skirt height for a more recognizable ghost.');
     if (parameters().cutoff === 1) notice('At 100%, a thin band just below the highest point is used to keep the envelope stable.');
@@ -160,7 +172,7 @@ $('reset').addEventListener('click', () => { ['x','y','z'].forEach(a => { $(`rot
 $('generate').addEventListener('click', generate);
 $('fit').addEventListener('click', () => viewer.fit());
 $('demo').addEventListener('click', () => load());
-$('export').addEventListener('click', () => { if (ghost && !$('export').disabled) { exportSTL(ghost, filename); status('STL exported · happy printing'); } });
+$('export').addEventListener('click', () => { if (ghost && !$('export').disabled) { exportSTL(ghost, filename); playExportSound(); status('STL exported · happy printing'); } });
 $('file').addEventListener('change', event => { const file = event.target.files[0]; if (file) load(file); event.target.value = ''; });
 const drop = $('drop-zone');
 ['dragenter','dragover'].forEach(name => drop.addEventListener(name, event => { event.preventDefault(); drop.classList.add('dragging'); }));

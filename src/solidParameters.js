@@ -1,5 +1,5 @@
 export const solidDefaults = {
-  hollow: false,
+  hollow: true,
   wallThickness: 2,
   openBottom: true,
   eyes: false,
