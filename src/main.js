@@ -19,6 +19,7 @@ function parameters() {
   const p = { ...defaults, ...solidDefaults };
   document.querySelectorAll('input[type=range]').forEach(input => { p[input.id] = Number(input.value) / (normalized.has(input.id) ? 100 : 1); });
   p.skirtHeight = $('skirtHeight').value === '' ? null : Number($('skirtHeight').value);
+  p.targetSize = $('targetSize').value === '' ? null : Number($('targetSize').value);
   for (const key of ['hollow', 'openBottom', 'eyes']) p[key] = $(key).checked;
   for (const key of ['wallThickness', 'eyeWidth', 'eyeHeight', 'eyeSpacing']) p[key] = Number($(key).value);
   p.eyeShape = $('eyeShape').value;
@@ -30,7 +31,8 @@ function status(message, state = '') { $('status').className = state; $('status'
 function notice(message = '') { $('notice').textContent = message; $('notice').hidden = !message; }
 function updateSource() {
   if (!sourceReady) return;
-  sourceSize = viewer.orient(rotation(), parameters().cutoff);
+  try { sourceSize = viewer.orient(rotation(), parameters().cutoff, parameters().targetSize); }
+  catch (error) { notice(error.message); return; }
   $('source-details').textContent = `${sourceSize.x.toFixed(1)} × ${sourceSize.y.toFixed(1)} × ${sourceSize.z.toFixed(1)} mm`;
 }
 function generate() {
@@ -91,6 +93,7 @@ async function load(file) {
     if (token !== loadToken) return;
     filename = file?.name || 'rabbit.stl'; $('filename').textContent = file?.name || 'Rabbit example';
     ['x','y','z'].forEach(a => { $(`rotate-${a}`).value = 0; });
+    $('targetSize').value = '';
     worker.postMessage({ type: 'load', buffer }, buffer ? [buffer] : []);
   } catch (error) { status('Could not read file', 'error'); notice(error.message); }
 }
@@ -100,6 +103,8 @@ document.querySelectorAll('input[type=range]').forEach(input => {
 });
 ['x','y','z'].forEach(a => $(`rotate-${a}`).addEventListener('input', () => invalidate(true)));
 $('skirtHeight').addEventListener('input', () => invalidate());
+$('targetSize').addEventListener('input', () => { fitNext = true; invalidate(true); });
+$('reset-size').addEventListener('click', () => { $('targetSize').value = ''; fitNext = true; invalidate(true); });
 function syncSolidControls() {
   $('hollow-controls').disabled = !$('hollow').checked;
   $('eye-controls').disabled = !$('eyes').checked;

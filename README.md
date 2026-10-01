@@ -17,6 +17,8 @@ Open the local URL printed by Vite. On Windows PowerShell with script restrictio
 
 The rabbit example loads immediately. Drop an STL or browse for one, then use the Source or Overlay view to orient it with X/Y/Z rotations. The model is centered in XY and placed on Z=0 after each orientation change. STL units are assumed to be millimetres.
 
+Set **Target size** in Source to uniformly scale the model to a chosen longest bounding-box side in millimetres, measured after orientation. All three axes retain their proportions. Leave it blank or click **Original size** to restore the imported scale; a new upload resets it. The source dimensions, cutoff plane, and generated ghost use the same scale, and the camera refits after resizing. Clearance, wall thickness, eye dimensions, and fold depth remain absolute millimetres; the final ghost can be larger than the source target. Existing click-placed eyes retain scene coordinates, so resizing after placement may require repositioning them.
+
 “Use source above” is a height percentage: 58% uses the upper 42% of the model. The mint plane marks this height; geometry below it is dimmed in the source preview. Adjust clearance and smoothing, then spread, skirt height, folds and asymmetry. Leaving skirt height blank uses the cutoff height automatically. Controls regenerate after a 200 ms debounce. Export is disabled while the settings are awaiting a valid result.
 
 Export writes only the generated solid as binary `originalname_ghost.stl`. The developer view exposes raw section points, generated rings, cutoff plane, bounding box and wireframe.
@@ -38,7 +40,7 @@ Drag to orbit as usual; right-drag pans and scrolling zooms. Clicks on empty spa
 3. Calculate a convex hull of each horizontal section, including disconnected components. Cast 128 evenly spaced 2D radial rays from each section's center against that hull. Fill missing height bands by interpolation.
 4. Smooth radii circumferentially and vertically, smooth section centers, and add clearance in millimetres. This intentionally removes cavities and small detail to produce a loose envelope.
 5. **The first smoothed upper contour is the skirt transition.** `skirtGenerator.js` extends that contour downward with 36 rings. Below this join, it never consults the source. Spread grows as `t^1.5`; fold strength uses a smoothstep. Periodic, deterministic phase and amplitude modulation introduce irregularity and asymmetry without a seam or per-vertex noise.
-6. Close the top with 14 shrinking elliptical rings and one apex. Close the exact Z=0 bottom ring with a consistently wound triangle fan. Positive radii and increasing ring heights keep the cross sections simple and the surface free of folds crossing themselves.
+6. Replace the final upper contours with one broad rounded crown. Blend into it below the tip, then use 28 elliptical profile steps with continuously narrowing radii and a horizontal tangent at the apex. This avoids attaching a separate button-like dome to an already tapering source tip. Close the exact Z=0 bottom ring with a consistently wound triangle fan. Positive radii and increasing ring heights keep the cross sections simple and the surface free of folds crossing themselves.
 7. Optionally generate an inner cavity from a signed Euclidean-distance field of the outer surface, accelerated with `three-mesh-bvh`. Manifold's level-set mesher approximates the inset in real millimetres. For an open bottom, distance measurements exclude the original floor and the cavity extends below Z=0. For a closed floor, the distance field includes the floor.
 8. Subtract the cavity with Manifold. Subtract 96-sided circular or elliptical cylinder cutters for the eyes. Sample the cavity across each opening to find a cut depth inside it, preserving the rear wall. The outer shape and cavity are cached separately, so eye adjustments reuse the cavity. Coincident inner-surface vertex fans are separated at micron scale before booleans to avoid STL weld pinches; tiny boolean slivers are simplified before export.
 9. Recalculate normals and validate finite and distinct vertex positions, nonzero triangle areas, two opposite uses of every edge, positive signed volume, and a grounded base. Only validated meshes become exportable. The preview uses separate creased normals so eye rims look crisp without changing the export topology.
@@ -50,6 +52,7 @@ STL parsing, generation and validation run in a dedicated Web Worker. Requests a
 - `src/ghostGenerator.js`: public `generateGhost(sourceBufferGeometry, transformMatrix, parameters)` API; defaults, ring assembly and rounded top.
 - `src/contourSampler.js`: triangle slicing, convex sections, interpolation and smoothing. Change the `36` smoothing pass multiplier to alter smoothing strength.
 - `src/skirtGenerator.js`: nonlinear spread, deterministic fold modulation and radius safety floor. Change the `0.75` spread multiplier or ring count here.
+- `src/roundedCrown.js`: blended crown replacement, its join height, elliptical taper and apex sampling.
 - `src/meshUtils.js`: orientation and solid validation.
 - `src/solidProcessor.js`: async `createSolidProcessor()` initializes Manifold; its `process(outerGeometry, parameters)` returns a new hollow/eye-cut geometry. Call `clear()` to release cached WASM solids. Distance-grid spacing and its allocation guard live here.
 - `src/solidParameters.js`: hollow and eye defaults, separate from envelope generation parameters.
@@ -59,7 +62,7 @@ STL parsing, generation and validation run in a dedicated Web Worker. Requests a
 - `src/viewer.js`: Z-up Three.js viewport, source clipping, diagnostics and OrbitControls.
 - `src/main.js` and `src/ui.js`: state, input handling and UI.
 
-The easiest code parameters to tune are `angularSamples` (128), `verticalSamples` (60), smoothing passes, skirt ring count (36) and cap layers (14). Clearance and fold depth are absolute millimetres. `bottomSpread`, smoothing, irregularity and asymmetry are normalized 0–1; fold count is an integer. `skirtHeight: null` uses the cutoff height, with a minimum of 8% of source height to preserve a skirt when cutoff is zero.
+The easiest code parameters to tune are `angularSamples` (128), `verticalSamples` (60), smoothing passes, skirt ring count (36) and crown layers (28). `targetSize: null` preserves the source size; a positive value sets its longest oriented side in mm. Clearance and fold depth are absolute millimetres. `bottomSpread`, smoothing, irregularity and asymmetry are normalized 0–1; fold count is an integer. `skirtHeight: null` uses the cutoff height, with a minimum of 8% of source height to preserve a skirt when cutoff is zero.
 
 ## Limitations
 

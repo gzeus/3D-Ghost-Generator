@@ -42,6 +42,15 @@ try {
   assert.match(await evaluate('document.querySelector("#status").textContent'), /Watertight/);
   await sleep(800);
   const shot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'desktop.png'), Buffer.from(shot.data, 'base64'));
+  await evaluate('document.querySelector("#targetSize").value=130.5; document.querySelector("#targetSize").dispatchEvent(new Event("input"));');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#source-details").textContent'), /60.0 × 51.0 × 130.5/);
+  await evaluate('document.querySelector("#targetSize").value=0; document.querySelector("#targetSize").dispatchEvent(new Event("input"));');
+  await waitFor('document.querySelector("#status").className === "error"');
+  assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
+  await evaluate('document.querySelector("#reset-size").click()');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.match(await evaluate('document.querySelector("#source-details").textContent'), /40.0 × 34.0 × 87.0/);
   await evaluate('document.querySelector("#eyes").click()');
   assert.equal(await evaluate('document.querySelector("#hollow").checked'), true);
   assert.equal(await evaluate('document.querySelector("#export").disabled'), true);

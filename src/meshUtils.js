@@ -1,8 +1,16 @@
 import * as THREE from 'three';
 
-export function orientGeometry(source, transform = new THREE.Matrix4()) {
+export function orientGeometry(source, transform = new THREE.Matrix4(), targetSize = null) {
+  if (targetSize !== null && (!Number.isFinite(targetSize) || targetSize <= 0)) throw new Error('Target size must be a positive number in millimetres.');
   const geometry = source.clone().applyMatrix4(transform);
   geometry.computeBoundingBox();
+  if (targetSize !== null) {
+    const size = geometry.boundingBox.getSize(new THREE.Vector3());
+    const longest = Math.max(size.x, size.y, size.z);
+    if (!(longest > 0)) { geometry.dispose(); throw new Error('The source has no measurable size.'); }
+    const scale = targetSize / longest;
+    geometry.scale(scale, scale, scale); geometry.computeBoundingBox();
+  }
   const box = geometry.boundingBox;
   const center = box.getCenter(new THREE.Vector3());
   geometry.translate(-center.x, -center.y, -box.min.z);

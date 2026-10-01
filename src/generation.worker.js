@@ -34,7 +34,7 @@ self.onmessage = async ({ data }) => {
     let stats;
     try { stats = validateSolid(result); }
     catch (error) { result.dispose(); throw error; }
-    const oriented = orientGeometry(source, matrix);
+    const oriented = orientGeometry(source, matrix, data.params.targetSize ?? null);
     const size = oriented.boundingBox.getSize(new THREE.Vector3()); oriented.dispose();
     const positions = result.attributes.position.array;
     const indices = result.index.array;

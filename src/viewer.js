@@ -48,12 +48,13 @@ export function createViewer(container) {
     if (samplePoints) samplePoints.visible = debug.points;
     placementTool.configure({ ...placementConfig, visible: ghostMesh.visible });
   };
-  function orient(rotation, fraction) {
+  function orient(rotation, fraction, targetSize = null) {
     if (!original) return;
-    const rotationKey = rotation.join(',');
+    const rotationKey = `${rotation.join(',')}:${targetSize}`;
     if (rotationKey !== lastRotation) {
       const matrix = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...rotation.map(THREE.MathUtils.degToRad), 'XYZ'));
-      sourceMesh.geometry.dispose(); sourceMesh.geometry = orientGeometry(original, matrix); dimMesh.geometry = sourceMesh.geometry;
+      const next = orientGeometry(original, matrix, targetSize);
+      sourceMesh.geometry.dispose(); sourceMesh.geometry = next; dimMesh.geometry = sourceMesh.geometry;
       lastRotation = rotationKey;
       if (boxHelper) { scene.remove(boxHelper); boxHelper.geometry.dispose(); boxHelper.material.dispose(); }
       boxHelper = new THREE.Box3Helper(sourceMesh.geometry.boundingBox, '#c2a574'); scene.add(boxHelper);
