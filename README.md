@@ -1,3 +1,5 @@
+![Ghost Studio showing the 3D ghost preview and model controls](ghost_studio_screenshot.png)
+
 # Sheet / Ghost Studio
 
 A small, browser-only modelling utility that turns an STL, OBJ, or 3MF model into a solid or hollow sheet ghost with optional see-through eyes. Built with Vite, vanilla JavaScript, Three.js, and a locally bundled Manifold WASM boolean engine. No cloth physics, accounts, remote processing or file uploads. Runtime assets are bundled locally; the app does not load fonts or scripts from a CDN.
@@ -12,6 +14,28 @@ npm run dev
 ```
 
 Open the local URL printed by Vite. On Windows PowerShell with script restrictions, use `npm.cmd` in place of `npm`. `npm run build` creates `dist/`; `npm run preview` serves that build. Serve the app over HTTP rather than opening `index.html` directly, because it uses ES modules and a Web Worker.
+
+## Publish on GitHub Pages
+
+The included [deployment workflow](.github/workflows/deploy.yml) tests, builds, and publishes the app on pushes to `main`. It can also be started manually.
+
+1. Create a GitHub repository and push this project to its `main` branch. Include `.github/workflows/deploy.yml`, `package-lock.json`, `src/assets/` (the example STL and four WAV files), and `ghost_studio_screenshot.png`. Dependencies, build output, and test artifacts are already excluded by `.gitignore`.
+2. In the repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+3. Open **Actions → Deploy to GitHub Pages → Run workflow**, select `main`, and run it. Future pushes to `main` deploy automatically. If the initial push ran before Pages was enabled, rerun that workflow after step 2.
+4. When the workflow succeeds, open the URL shown by its `github-pages` deployment, or find it under **Settings → Pages**.
+
+The workflow uses Node.js 24, `npm ci`, `npm test`, and a Vite production build. It gets the site's base path from GitHub Pages, so model, audio, worker, and WASM URLs work under a repository subdirectory as well as a root/custom domain. No repository name needs to be hardcoded in `vite.config.js`. The built-in `GITHUB_TOKEN` handles deployment; no personal access token is required. If you use a branch other than `main`, update the workflow's `push.branches` and the Pages environment's allowed deployment branches.
+
+For a local check of a repository-subdirectory build:
+
+```sh
+npm run build -- --base=/ghost-studio/
+npm run preview -- --base=/ghost-studio/
+```
+
+Open `http://127.0.0.1:4173/ghost-studio/` (or the port Vite prints). A normal `npm run build` still builds for the site root. GitHub hosts the app's static files; imported models are processed in the visitor's browser.
+
+Deployment references: [Vite's GitHub Pages guide](https://vite.dev/guide/static-deploy.html#github-pages) and [GitHub's custom Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
 ## Workflow
 
@@ -29,7 +53,7 @@ Export writes only the generated solid as binary `originalname_ghost.stl`. The d
 
 ### Hollow interior and eyes
 
-In **Hollow & eyes**, enable **Hollow interior** and enter the wall thickness in millimetres (default 2 mm). **Open underside** is on by default: the inner and outer surfaces join at a planar bottom rim. Turn it off to keep a floor with the same nominal thickness as the walls. Both modes export a closed, manifold boundary of the printable material; an open underside is not an unconnected mesh edge.
+In **Hollow & eyes**, **Hollow interior** is enabled by default with a wall thickness of 2 mm. **Open underside** is on by default: the inner and outer surfaces join at a planar bottom rim. Turn it off to keep a floor with the same nominal thickness as the walls. Both modes export a closed, manifold boundary of the printable material; an open underside is not an unconnected mesh edge.
 
 **Add see-through eyes** automatically enables hollowing. Choose round eyes (diameter) or oval eyes (width and height), adjust center-to-center spacing, height as a percentage of the finished ghost, and face direction. At 0° the face points toward −Y; 90° faces +X. The holes open only the front wall into the cavity. If an opening cannot fit fully over the cavity without reaching the rear wall, generation stops with adjustment guidance and export stays disabled. Turning off hollowing also turns off eyes.
 
@@ -72,7 +96,7 @@ The easiest code parameters to tune are `angularSamples` (128), `verticalSamples
 
 ## Limitations
 
-- This is a stylized, convex horizontal envelope, not a physical drape or a fitted cover for the source. Smoothing can move the surface inside parts of the original. Solid mode remains the default; hollow mode insets the generated ghost, not the uploaded source.
+- This is a stylized, convex horizontal envelope, not a physical drape or a fitted cover for the source. Smoothing can move the surface inside parts of the original. Hollow mode is the default and insets the generated ghost, not the uploaded source.
 - Wall thickness is a nominal Euclidean inset, approximated by the cavity's triangle mesh. Curved regions and tight folds have small sampling deviations; narrow features can remain solid. Very thin walls on large models exceed a bounded sampling budget and produce an instruction to increase thickness instead of exhausting browser memory.
 - Eyes are straight circular/elliptical bores, either a symmetric pair or individually projected from camera clicks. Large or grazing-angle holes near a thin roof, narrow neck, or folds may not fit; reduce their size, move them, or reduce wall thickness. A rejected click identifies the eye to undo/remove. The app does not automatically relocate invalid holes or silently create blind recesses. Overlapping cuts can merge into one opening; large placement counts increase boolean processing time.
 - Each height has one contour and the top has one rounded closure. Separate ears/horns are bridged; narrow features can be softened away. Strongly concave, sideways or branching models may lose recognizability.
