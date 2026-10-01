@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { demoGeometry } from './stlImport.js';
 import { importModel } from './modelImport.js';
 import { generateGhost, defaults } from './ghostGenerator.js';
 import { orientGeometry, validateSolid } from './meshUtils.js';
@@ -10,7 +9,7 @@ let source, cachedOuter, outerKey, processor, processorPromise;
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'load') {
-      const next = data.buffer ? importModel(data.buffer, data.filename) : demoGeometry();
+      const next = importModel(data.buffer, data.filename);
       source?.dispose(); source = next;
       cachedOuter?.dispose(); cachedOuter = undefined; outerKey = undefined; processor?.clear();
       const plain = source.index ? source.toNonIndexed() : source.clone();

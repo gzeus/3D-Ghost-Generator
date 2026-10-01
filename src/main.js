@@ -4,6 +4,7 @@ import { createViewer } from './viewer.js';
 import { defaults } from './ghostGenerator.js';
 import { solidDefaults } from './solidParameters.js';
 import { exportSTL } from './exportSTL.js';
+import exampleURL from './assets/benchy_example.stl?url';
 import './style.css';
 
 renderUI();
@@ -11,7 +12,7 @@ const $ = id => document.getElementById(id);
 let viewer;
 try { viewer = createViewer($('viewport')); viewer.start(); }
 catch (error) { $('notice').hidden = false; $('notice').textContent = 'The 3D preview needs WebGL. Enable hardware acceleration or try a WebGL-capable browser.'; throw error; }
-let worker, sourceReady = false, busy = false, revision = 0, pending = false, ghost, timer, fitNext = true, filename = 'rabbit', sourceSize;
+let worker, sourceReady = false, busy = false, revision = 0, pending = false, ghost, timer, fitNext = true, filename = 'benchy_example.stl', sourceSize;
 const placedEyes = [];
 const rotation = () => ['x', 'y', 'z'].map(a => Number($(`rotate-${a}`).value) || 0);
 const normalized = new Set(['cutoff', 'smoothing', 'topSmoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry', 'eyeLevel']);
@@ -89,13 +90,19 @@ async function load(file) {
   newWorker();
   placedEyes.length = 0; renderPlacedEyes(); syncSolidControls();
   try {
-    const buffer = file ? await file.arrayBuffer() : null;
+    let buffer;
+    if (file) buffer = await file.arrayBuffer();
+    else {
+      const response = await fetch(exampleURL);
+      if (!response.ok) throw new Error('Could not load the example model. Please try again.');
+      buffer = await response.arrayBuffer();
+    }
     if (token !== loadToken) return;
-    filename = file?.name || 'rabbit.stl'; $('filename').textContent = file?.name || 'Rabbit example';
+    filename = file?.name || 'benchy_example.stl'; $('filename').textContent = filename;
     ['x','y','z'].forEach(a => { $(`rotate-${a}`).value = 0; });
     $('targetSize').value = '';
     worker.postMessage({ type: 'load', buffer, filename }, buffer ? [buffer] : []);
-  } catch (error) { status('Could not read file', 'error'); notice(error.message); }
+  } catch (error) { if (token !== loadToken) return; status('Could not read file', 'error'); notice(error.message); }
 }
 document.querySelectorAll('input[type=range]').forEach(input => {
   const show = () => { const unit = input.dataset.unit; $(`${input.id}-value`).textContent = `${input.value}${unit === 'mm' ? ' ' : ''}${unit}`; input.style.setProperty('--fill', `${(Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min)) * 100}%`); };
@@ -160,7 +167,39 @@ const drop = $('drop-zone');
 ['dragleave','drop'].forEach(name => drop.addEventListener(name, event => { event.preventDefault(); drop.classList.remove('dragging'); }));
 drop.addEventListener('drop', event => { if (event.dataTransfer.files[0]) load(event.dataTransfer.files[0]); });
 window.addEventListener('dragover', event => event.preventDefault()); window.addEventListener('drop', event => event.preventDefault());
-document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { document.querySelectorAll('[data-mode]').forEach(b => { b.classList.toggle('active', b === button); b.setAttribute('aria-pressed', String(b === button)); }); viewer.setMode(button.dataset.mode); syncPlacement(); }));
+let viewMode = 'ghost', cutoffPreviousMode = null;
+function setViewMode(mode) {
+  viewMode = mode;
+  document.querySelectorAll('[data-mode]').forEach(button => {
+    const active = button.dataset.mode === mode;
+    button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
+  });
+  viewer.setMode(mode); syncPlacement();
+}
+function previewCutoff() {
+  if (cutoffPreviousMode !== null) return;
+  cutoffPreviousMode = viewMode;
+  setViewMode('source');
+}
+function finishCutoffPreview() {
+  if (cutoffPreviousMode === null) return;
+  const previous = cutoffPreviousMode;
+  cutoffPreviousMode = null;
+  setViewMode(previous);
+}
+const cutoffKeys = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
+$('cutoff').addEventListener('pointerdown', previewCutoff);
+$('cutoff').addEventListener('keydown', event => { if (cutoffKeys.has(event.key)) previewCutoff(); });
+$('cutoff').addEventListener('keyup', event => { if (cutoffKeys.has(event.key)) finishCutoffPreview(); });
+$('cutoff').addEventListener('blur', finishCutoffPreview);
+$('cutoff').addEventListener('lostpointercapture', finishCutoffPreview);
+window.addEventListener('pointerup', finishCutoffPreview);
+window.addEventListener('pointercancel', finishCutoffPreview);
+window.addEventListener('blur', finishCutoffPreview);
+document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => {
+  cutoffPreviousMode = null;
+  setViewMode(button.dataset.mode);
+}));
 $('show-source').addEventListener('change', event => viewer.setSourceVisible(event.target.checked));
 document.querySelectorAll('[data-debug]').forEach(input => input.addEventListener('change', () => viewer.setDebug(input.dataset.debug, input.checked)));
 load();

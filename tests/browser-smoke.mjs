@@ -8,6 +8,7 @@ import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { validateSolid } from '../src/meshUtils.js';
+import { demoGeometry } from '../src/stlImport.js';
 import { archive3MF, modelXML, tetraMesh, wideOBJ } from './import-fixtures.js';
 
 const artifacts = path.resolve('artifacts');
@@ -43,6 +44,33 @@ try {
   assert.match(await evaluate('document.querySelector("#status").textContent'), /Watertight/);
   await sleep(800);
   const shot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'desktop.png'), Buffer.from(shot.data, 'base64'));
+  assert.equal(await evaluate('document.querySelector("#filename").textContent'), 'benchy_example.stl');
+  const activeMode = () => evaluate('document.querySelector("[data-mode].active").dataset.mode');
+  for (const mode of ['ghost', 'overlay', 'source']) {
+    await evaluate(`document.querySelector('[data-mode=${mode}]').click(); document.querySelector('#cutoff').scrollIntoView({block:'center'});`);
+    const bounds = await evaluate('JSON.stringify(document.querySelector("#cutoff").getBoundingClientRect())');
+    const rect = JSON.parse(bounds), x = rect.x + rect.width * 0.58, y = rect.y + rect.height / 2;
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    assert.equal(await activeMode(), 'source');
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + 10, y, buttons: 1 });
+    assert.equal(await activeMode(), 'source');
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + 10, y, button: 'left', clickCount: 1 });
+    assert.equal(await activeMode(), mode);
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+    assert.equal(await activeMode(), 'source');
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+    assert.equal(await activeMode(), mode);
+  }
+  await evaluate('document.querySelector("[data-mode=ghost]").click(); document.querySelector("#cutoff").value=58; document.querySelector("#cutoff").dispatchEvent(new Event("input"));');
+  await waitFor('!document.querySelector("#export").disabled');
+  // Keep the established geometry/eye-placement regression fixture independent of the bundled example.
+  const rabbit = demoGeometry();
+  await writeFile(path.join(artifacts, 'rabbit.stl'), Buffer.from(new STLExporter().parse(new THREE.Mesh(rabbit), { binary: true }).buffer));
+  rabbit.dispose();
+  const fixtureDocument = await send('DOM.getDocument');
+  const fixtureInput = await send('DOM.querySelector', { nodeId: fixtureDocument.root.nodeId, selector: '#file' });
+  await send('DOM.setFileInputFiles', { nodeId: fixtureInput.nodeId, files: [path.join(artifacts, 'rabbit.stl')] });
+  await waitFor('document.querySelector("#filename").textContent === "rabbit.stl" && !document.querySelector("#export").disabled');
   assert.equal(await evaluate('document.querySelector("#topSmoothing-value").textContent'), '35%');
   for (const value of [0, 100, 35]) {
     await evaluate(`document.querySelector("#topSmoothing").value=${value}; document.querySelector("#topSmoothing").dispatchEvent(new Event("input"));`);
