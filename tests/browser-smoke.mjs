@@ -43,6 +43,13 @@ try {
   assert.match(await evaluate('document.querySelector("#status").textContent'), /Watertight/);
   await sleep(800);
   const shot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'desktop.png'), Buffer.from(shot.data, 'base64'));
+  assert.equal(await evaluate('document.querySelector("#topSmoothing-value").textContent'), '35%');
+  for (const value of [0, 100, 35]) {
+    await evaluate(`document.querySelector("#topSmoothing").value=${value}; document.querySelector("#topSmoothing").dispatchEvent(new Event("input"));`);
+    assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
+    await waitFor('!document.querySelector("#export").disabled');
+    assert.equal(await evaluate('document.querySelector("#topSmoothing-value").textContent'), `${value}%`);
+  }
   await evaluate('document.querySelector("#targetSize").value=130.5; document.querySelector("#targetSize").dispatchEvent(new Event("input"));');
   await waitFor('!document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#source-details").textContent'), /60.0 × 51.0 × 130.5/);

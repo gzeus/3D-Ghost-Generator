@@ -92,3 +92,14 @@ test('invalid thickness and eyes fail clearly instead of exporting blind recesse
   assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeWidth: 35, eyeSpacing: 40 }), /interior|depth/);
   assert.throws(() => processor.process(outer, { hollow: true, wallThickness: 30 }), /interior/);
 });
+
+test('top smoothing endpoints remain printable with hollow walls and eye booleans', () => {
+  for (const topSmoothing of [0, 1]) {
+    const outer = generateGhost(demoGeometry(), new THREE.Matrix4(), { topSmoothing });
+    const result = processor.process(outer, { hollow: true, eyes: true });
+    validateSolid(result);
+    const bytes = new STLExporter().parse(new THREE.Mesh(result), { binary: true });
+    const imported = new STLLoader().parse(bytes.buffer); imported.deleteAttribute('normal');
+    validateSolid(mergeVertices(imported, 1e-6));
+  }
+});

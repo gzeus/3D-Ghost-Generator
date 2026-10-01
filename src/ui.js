@@ -18,6 +18,9 @@ export function renderUI() {
           ${slider('cutoff', 'Use source above', 0, 100, 58)}<div class="range-hints"><span>Whole model</span><span>Top only</span></div>
           ${slider('clearance', 'Sheet clearance', 0, 10, 2.5, 'mm', 0.1)}
           ${slider('smoothing', 'Sheet smoothing', 0, 100, 65)}
+          ${slider('topSmoothing', 'Top smoothing', 0, 100, 35)}
+          <div class="range-hints"><span>Follow contours</span><span>Rounded crown</span></div>
+          <p class="control-help">Lower values preserve upper protrusions. Higher values blend them into a softer crown.</p>
         </section>
         <section><div class="section-title"><h2><span>03</span> Skirt</h2><span class="section-hint">LET IT HANG</span></div>
           ${slider('bottomSpread', 'Bottom spread', 0, 100, 40)}

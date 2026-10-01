@@ -14,7 +14,7 @@ catch (error) { $('notice').hidden = false; $('notice').textContent = 'The 3D pr
 let worker, sourceReady = false, busy = false, revision = 0, pending = false, ghost, timer, fitNext = true, filename = 'rabbit', sourceSize;
 const placedEyes = [];
 const rotation = () => ['x', 'y', 'z'].map(a => Number($(`rotate-${a}`).value) || 0);
-const normalized = new Set(['cutoff', 'smoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry', 'eyeLevel']);
+const normalized = new Set(['cutoff', 'smoothing', 'topSmoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry', 'eyeLevel']);
 function parameters() {
   const p = { ...defaults, ...solidDefaults };
   document.querySelectorAll('input[type=range]').forEach(input => { p[input.id] = Number(input.value) / (normalized.has(input.id) ? 100 : 1); });

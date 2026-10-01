@@ -32,6 +32,29 @@ test('crown tapers continuously with increasing curvature instead of a second ra
   }
 });
 
+test('top smoothing preserves high protrusions at low settings and leaves the skirt unchanged', () => {
+  const profile = [[0, 0], [10, 0], [10, 90], [32, 94], [32, 96], [7, 97], [1, 100], [0, 100]].map(([r, z]) => new THREE.Vector2(r, z));
+  const source = new THREE.LatheGeometry(profile, 96).rotateX(Math.PI / 2);
+  const variants = [0, 0.35, 1].map(topSmoothing => generateGhost(source, new THREE.Matrix4(), { topSmoothing, smoothing: 1 }));
+  const widthAt = (geometry, height) => {
+    const p = geometry.attributes.position, n = geometry.userData.angularSamples;
+    let distance = Infinity, radius = 0;
+    for (let i = 0; i < geometry.userData.ringCount; i++) {
+      const d = Math.abs(p.getZ(i * n) - height);
+      if (d < distance) { distance = d; radius = (p.getX(i * n) - p.getX(i * n + n / 2)) / 2; }
+    }
+    return radius;
+  };
+  assert.ok(widthAt(variants[0], 95) > 30, 'low top smoothing retains the upper flange despite high general smoothing');
+  assert.ok(widthAt(variants[1], 95) > widthAt(variants[2], 95) + 5, 'gentle default preserves more upper detail than full rounding');
+  assert.ok(widthAt(variants[0], 95) > widthAt(variants[2], 95) + 15, 'full rounding visibly softens the flange');
+  for (const ghost of variants) {
+    validateSolid(ghost);
+    assert.deepEqual(ghost.attributes.position.array.slice(0, 36 * 128 * 3), variants[0].attributes.position.array.slice(0, 36 * 128 * 3));
+  }
+  assert.throws(() => generateGhost(source, new THREE.Matrix4(), { topSmoothing: 1.1 }), /topSmoothing/);
+});
+
 test('target size scales uniformly after orientation and keeps the source centered and grounded', () => {
   const original = new THREE.BoxGeometry(20, 40, 80).translate(100, -30, 40);
   const matrix = new THREE.Matrix4().makeRotationX(Math.PI / 2);
