@@ -37,6 +37,8 @@ Open `http://127.0.0.1:4173/ghost-studio/` (or the port Vite prints). A normal `
 
 Deployment references: [Vite's GitHub Pages guide](https://vite.dev/guide/static-deploy.html#github-pages) and [GitHub's custom Pages workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
+If **Configure Pages** fails with **Get Pages site failed / Not Found**, the repository's Pages site has not been enabled. Complete step 2 above, then rerun the failed workflow. Pushing code alone does not enable Pages; this is a repository setting, not a Vite build error.
+
 ## Workflow
 
 The bundled `src/assets/benchy_example.stl` example loads immediately. Drop an STL, OBJ, or 3MF file or browse for one, then use the Source or Overlay view to orient it with X/Y/Z rotations. The model is centered in XY and placed on Z=0 after each orientation change. STL and OBJ units are assumed to be millimetres; 3MF's declared units are converted to millimetres.
