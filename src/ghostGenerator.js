@@ -4,7 +4,7 @@ import { sampleContours, smoothContours } from './contourSampler.js';
 import { generateSkirt } from './skirtGenerator.js';
 import { roundedCrown } from './roundedCrown.js';
 
-export const defaults = { targetSize: null, cutoff: 0.58, clearance: 2.5, smoothing: 0.65, topSmoothing: 0.35, bottomSpread: 0.4, skirtHeight: null, foldCount: 7, foldDepth: 4, foldIrregularity: 0.2, asymmetry: 0.15, angularSamples: 128, verticalSamples: 60 };
+export const defaults = { targetSize: null, cutoff: 0.25, clearance: 2.5, smoothing: 0.65, topSmoothing: 0.35, bottomSpread: 0.4, skirtHeight: null, foldCount: 7, foldDepth: 4, foldIrregularity: 0.2, asymmetry: 0.15, angularSamples: 128, verticalSamples: 60 };
 
 export function generateGhost(source, transform = new THREE.Matrix4(), parameters = {}) {
   const p = { ...defaults, ...parameters };

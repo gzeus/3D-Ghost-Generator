@@ -43,10 +43,66 @@ try {
   await waitFor('document.querySelector("#export") && !document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#status").textContent'), /Manifold shell/);
   assert.equal(await evaluate('document.querySelector("#hollow").checked'), true);
+  assert.equal(await evaluate('document.querySelector("#cutoff").value'), '25');
+  assert.equal(await evaluate('document.querySelector("#proceduralEyes").checked'), false);
+  assert.equal(await evaluate('document.querySelector("#paired-eye-controls").hidden'), true);
+  assert.equal(await evaluate('document.querySelector("#placed-eye-controls").hidden'), false);
+  for (const id of ['export-easyprint', 'export-prusaslicer']) {
+    await waitFor(`document.querySelector('#${id} img').complete && document.querySelector('#${id} img').naturalWidth > 0`);
+  }
   assert.equal(await evaluate('document.querySelector(".viewport-top h2").textContent'), 'Watch out - the export is Spoooky!');
   assert.equal(await evaluate('document.querySelector(".viewport-caption")'), null);
   await evaluate(`window.exportAudioCalls = []; const originalPlay = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function () { window.exportAudioCalls.push(this); return originalPlay.call(this); };`);
+  await evaluate(`
+    window.savedXHR = window.XMLHttpRequest; window.savedOpen = window.open;
+    window.savedAnchorClick = HTMLAnchorElement.prototype.click;
+    window.prusaRequests = []; window.prusaOpened = []; window.prusaMode = 'success';
+    window.open = (...args) => { window.prusaOpened.push(args); return null; };
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.href.startsWith('prusaslicer:')) window.prusaOpened.push([this.href]);
+      else window.savedAnchorClick.call(this);
+    };
+    window.XMLHttpRequest = class {
+      constructor() { this.upload = {}; }
+      open(method, url) { this.method = method; this.url = url; }
+      setRequestHeader(name, value) { this.accept = value; }
+      send(form) {
+        window.prusaRequests.push({method:this.method, url:this.url, accept:this.accept, file:form.get('file').name, type:form.get('file').type});
+        this.upload.onprogress({lengthComputable:true, loaded:50, total:100});
+        if (window.prusaMode === 'wait') return;
+        setTimeout(() => {
+          this.status = window.prusaMode === 'error' ? 500 : 200;
+          this.responseText = JSON.stringify(this.status === 500 ? {error:'upload-failed'} : {
+            easyprint_url:'https://www.printables.com/slice?file_url=test',
+            prusaslicer_url:'prusaslicer://open?file=https%3A%2F%2Fslicer.printables.com%2Fimport%2Ftemp%2Ftest.stl'
+          }); this.onload();
+        }, 20);
+      }
+      abort() { this.onabort(); }
+    };
+    if (document.querySelector('#toggle-sounds').getAttribute('aria-pressed') === 'true') document.querySelector('#toggle-sounds').click();
+    document.querySelector('#export-easyprint').click();
+  `);
+  await waitFor('!document.querySelector("#prusa-continue").hidden');
+  assert.equal(await evaluate('window.prusaOpened[0][1]'), '_blank');
+  assert.deepEqual(await evaluate('window.prusaRequests[0]'), {method:'POST',url:'https://slicer.printables.com/import',accept:'application/json',file:'benchy_example_ghost.stl',type:'model/stl'});
+  assert.equal(await evaluate('window.exportAudioCalls.length'), 1);
+  await evaluate('document.querySelector("#cancel-upload").click(); document.querySelector("#export-prusaslicer").click();');
+  await waitFor('window.prusaOpened.length === 2');
+  assert.match(await evaluate('window.prusaOpened[1][0]'), /^prusaslicer:/);
+  assert.equal(await evaluate('window.exportAudioCalls.length'), 2);
+  await evaluate('document.querySelector("#cancel-upload").click(); document.querySelector("#toggle-sounds").click(); window.prusaMode="wait"; document.querySelector("#export-easyprint").click();');
+  assert.equal(await evaluate('document.querySelector("#upload-progress").value'), 50);
+  assert.equal(await evaluate('window.exportAudioCalls.length'), 2);
+  assert.equal(await evaluate('localStorage.getItem("ghost-studio-spooky-sounds")'), 'off');
+  await evaluate('document.querySelector("#cancel-upload").click()');
+  await waitFor('!document.querySelector("#prusa-upload").open');
+  assert.match(await evaluate('document.querySelector("#status").textContent'), /cancelled/);
+  await evaluate('window.prusaMode="error"; document.querySelector("#export-prusaslicer").click()');
+  await waitFor('!document.querySelector("#notice").hidden');
+  assert.match(await evaluate('document.querySelector("#notice").textContent'), /upload-failed/);
+  await evaluate('window.XMLHttpRequest=window.savedXHR; window.open=window.savedOpen; HTMLAnchorElement.prototype.click=window.savedAnchorClick; document.querySelector("#toggle-sounds").click(); window.exportAudioCalls=[];');
   await sleep(800);
   const shot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'desktop.png'), Buffer.from(shot.data, 'base64'));
   assert.equal(await evaluate('document.querySelector("#filename").textContent'), 'benchy_example.stl');
@@ -95,6 +151,11 @@ try {
   await waitFor('!document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#source-details").textContent'), /40.0 × 34.0 × 87.0/);
   await evaluate('document.querySelector("#eyes").click()');
+  await waitFor('!document.querySelector("#export").disabled');
+  assert.equal(await evaluate('document.querySelector("#proceduralEyes").checked'), false);
+  assert.match(await evaluate('document.querySelector("#placed-eye-count").textContent'), /^0 eyes/);
+  assert.doesNotMatch(await evaluate('document.querySelector("#output-note").textContent'), /eye openings/);
+  await evaluate('document.querySelector("#proceduralEyes").click()');
   assert.equal(await evaluate('document.querySelector("#hollow").checked'), true);
   assert.equal(await evaluate('document.querySelector("#export").disabled'), true);
   await waitFor('!document.querySelector("#export").disabled');
@@ -127,7 +188,7 @@ try {
   await evaluate('document.querySelector("#hollow").click()');
   await waitFor('!document.querySelector("#export").disabled');
   assert.equal(await evaluate('document.querySelector("#eyes").checked'), false);
-  await evaluate('document.querySelector("#eyes").click(); document.querySelector("#clickEyes").click(); document.querySelector("#eyeShape").value="oval"; document.querySelector("#eyeShape").dispatchEvent(new Event("change")); document.querySelector("#eyeWidth").value=3; document.querySelector("#eyeWidth").dispatchEvent(new Event("input")); document.querySelector("#eyeHeight").value=5; document.querySelector("#eyeHeight").dispatchEvent(new Event("input"));');
+  await evaluate('document.querySelector("#eyes").click(); document.querySelector("#proceduralEyes").click(); document.querySelector("#eyeShape").value="oval"; document.querySelector("#eyeShape").dispatchEvent(new Event("change")); document.querySelector("#eyeWidth").value=3; document.querySelector("#eyeWidth").dispatchEvent(new Event("input")); document.querySelector("#eyeHeight").value=5; document.querySelector("#eyeHeight").dispatchEvent(new Event("input"));');
   await waitFor('!document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#placed-eye-count").textContent'), /^0 eyes/);
   const clickScene = async (x, y) => {
@@ -146,7 +207,7 @@ try {
   await clickScene(834, 719);
   await waitFor('document.querySelector("#placed-eye-list").children.length === 3 && !document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#placed-eye-list").textContent'), /Oval · 3 × 5 mm.*Round · 4 × 4 mm/);
-  await evaluate('document.querySelector("#clickEyes").scrollIntoView({block:"start"})');
+  await evaluate('document.querySelector("#proceduralEyes").scrollIntoView({block:"start"})');
   const clickShot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(path.join(artifacts, 'click-eyes.png'), Buffer.from(clickShot.data, 'base64'));
   await clickScene(850, 605); // An existing opening must not target the inner rear wall.
   assert.equal(await evaluate('document.querySelector("#placed-eye-list").children.length'), 3);
@@ -160,10 +221,10 @@ try {
   const clickedSTL = await readFile(path.join(artifacts, 'rabbit_ghost.stl'));
   const clickedGeometry = new STLLoader().parse(clickedSTL.buffer.slice(clickedSTL.byteOffset, clickedSTL.byteOffset + clickedSTL.byteLength));
   clickedGeometry.deleteAttribute('normal'); validateSolid(mergeVertices(clickedGeometry, 1e-6));
-  await evaluate('document.querySelector("#eyeSpacing").value=13; document.querySelector("#clickEyes").click()');
+  await evaluate('document.querySelector("#eyeSpacing").value=13; document.querySelector("#proceduralEyes").click()');
   await waitFor('!document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#output-note").textContent'), /eye openings \(2\)/);
-  await evaluate('document.querySelector("#clickEyes").click()');
+  await evaluate('document.querySelector("#proceduralEyes").click()');
   await waitFor('!document.querySelector("#export").disabled');
   assert.match(await evaluate('document.querySelector("#output-note").textContent'), /eye openings \(3\)/);
   await evaluate('document.querySelector("#undo-eye").click()');

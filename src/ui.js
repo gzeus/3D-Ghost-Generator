@@ -1,3 +1,6 @@
+import easyprintLogoURL from './assets/easyprint_logo.svg?url';
+import prusaslicerLogoURL from './assets/PrusaSlicer_logo.svg?url';
+
 const slider = (key, label, min, max, value, unit = '%', step = 1) => `<label class="control" for="${key}"><span>${label}</span><output id="${key}-value">${value}${unit === '°' || unit === '%' ? '' : ' '}${unit}</output></label><input id="${key}" data-unit="${unit}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" />`;
 const icon = `<svg viewBox="0 0 32 36" fill="none" aria-hidden="true"><path d="M5 29V15a11 11 0 0 1 22 0v14l-5-3-6 4-6-4-5 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 14v3m8-3v3" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
 export function renderUI() {
@@ -15,7 +18,7 @@ export function renderUI() {
           <div class="label-row"><span>All axes scale together</span><button id="reset-size" class="text-button" type="button">Original size ↺</button></div>
         </section>
         <section><div class="section-title"><h2><span>02</span> Sheet</h2><span class="section-hint">THE UPPER SILHOUETTE</span></div>
-          ${slider('cutoff', 'Use source above', 0, 100, 58)}<div class="range-hints"><span>Whole model</span><span>Top only</span></div>
+          ${slider('cutoff', 'Use source above', 0, 100, 25)}<div class="range-hints"><span>Whole model</span><span>Top only</span></div>
           ${slider('clearance', 'Sheet clearance', 0, 10, 2.5, 'mm', 0.1)}
           ${slider('smoothing', 'Sheet smoothing', 0, 100, 65)}
           ${slider('topSmoothing', 'Top smoothing', 0, 100, 35)}
@@ -40,20 +43,28 @@ export function renderUI() {
           <label class="feature-toggle eye-toggle"><input id="eyes" type="checkbox"/> Add see-through eyes</label>
           <p class="control-help">Enables a hollow interior. Openings cut through the front wall into the cavity.</p>
           <fieldset id="eye-controls" disabled>
-            <label class="feature-toggle"><input id="clickEyes" type="checkbox"/> Place eyes by clicking</label>
-            <p class="control-help" id="placement-help" hidden>Choose a shape and size for the next eye, then click the ghost. Drag to orbit; each click uses the current camera direction. Existing eyes keep their own size.</p>
+            <label class="feature-toggle"><input id="proceduralEyes" type="checkbox"/> Place eyes procedurally</label>
+            <p class="control-help" id="placement-help">Choose a shape and size for the next eye, then click the ghost. Drag to orbit; each click uses the current camera direction. Existing eyes keep their own size.</p>
             <label class="dimension-control" for="eyeShape"><span>Eye shape</span><select id="eyeShape"><option value="oval">Oval</option><option value="round">Round</option></select></label>
             <label class="dimension-control" for="eyeWidth"><span id="eyeWidth-label">Eye width</span><span><input id="eyeWidth" type="number" min="0.5" max="100" step="0.5" value="6"/> mm</span></label>
             <label class="dimension-control" for="eyeHeight" id="eyeHeight-row"><span>Eye height</span><span><input id="eyeHeight" type="number" min="0.5" max="100" step="0.5" value="9"/> mm</span></label>
-            <div id="paired-eye-controls"><label class="dimension-control" for="eyeSpacing"><span>Eye spacing <small>Center to center</small></span><span><input id="eyeSpacing" type="number" min="1" max="250" step="0.5" value="13"/> mm</span></label>
+            <div id="paired-eye-controls" hidden><label class="dimension-control" for="eyeSpacing"><span>Eye spacing <small>Center to center</small></span><span><input id="eyeSpacing" type="number" min="1" max="250" step="0.5" value="13"/> mm</span></label>
             ${slider('eyeLevel', 'Eye position · height', 10, 95, 65)}
             ${slider('eyeAngle', 'Face direction', -180, 180, 0, '°')}
             <p class="control-help">0° faces forward (−Y). Rotate the face around the ghost to choose another side.</p></div>
-            <div id="placed-eye-controls" hidden><div class="placed-header"><span id="placed-eye-count" aria-live="polite">0 eyes placed</span><button id="undo-eye" type="button" class="text-button" disabled>Undo last</button><button id="clear-eyes" type="button" class="text-button" disabled>Clear all</button></div><ol id="placed-eye-list" aria-label="Placed eyes"></ol><p class="control-help">No fixed eye limit. Switch this toggle off to use the original pair; your placed eyes are kept. Loading a new source clears placements.</p></div>
+            <div id="placed-eye-controls"><div class="placed-header"><span id="placed-eye-count" aria-live="polite">0 eyes placed</span><button id="undo-eye" type="button" class="text-button" disabled>Undo last</button><button id="clear-eyes" type="button" class="text-button" disabled>Clear all</button></div><ol id="placed-eye-list" aria-label="Placed eyes"></ol><p class="control-help">No fixed eye limit. Turn on procedural placement to use a symmetric pair; your placed eyes are kept. Loading a new source clears placements.</p></div>
           </fieldset>
         </section>
         <details class="debug"><summary>Developer view <span>+</span></summary><div>${[['points','Sampled contour points'],['rings','Generated contour rings'],['plane','Cutoff plane'],['box','Source bounding box'],['wireframe','Ghost wireframe']].map(([key, label]) => `<label><input type="checkbox" data-debug="${key}" ${key === 'plane' ? 'checked' : ''}>${label}</label>`).join('')}</div></details>
-        <div class="output"><button id="generate" class="secondary-button">↻ Update ghost</button><button id="export" class="primary-button" disabled>↓ Export STL</button><p id="output-note"></p></div>
+        <div class="output export-panel" aria-labelledby="export-heading">
+          <div class="export-heading"><h2 id="export-heading">Export</h2><button id="generate" class="text-button">Update ghost</button></div>
+          <button id="export" class="primary-button" disabled>Download STL</button>
+          <button id="export-easyprint" class="secondary-button" disabled>Print with <img class="export-logo" src="${easyprintLogoURL}" alt=""/> EasyPrint</button>
+          <button id="export-prusaslicer" class="secondary-button" disabled hidden>Open in <img class="export-logo" src="${prusaslicerLogoURL}" alt=""/> PrusaSlicer</button>
+          <p id="output-note"></p>
+          <p>Prusa options upload your ghost to Prusa. Download STL stays local.</p>
+          <button id="toggle-sounds" class="text-button sound-toggle" type="button" aria-pressed="false">Disable Spooky sounds</button>
+        </div>
       </aside>
       <div class="workspace">
         <div class="viewport-top"><div><span class="eyebrow">THE WORKBENCH</span><h2>Watch out - the export is Spoooky!</h2></div><span class="version">Version 1.0</span></div>
@@ -64,5 +75,12 @@ export function renderUI() {
         <div class="statusbar"><div id="status" role="status" aria-live="polite"><i></i> Preparing your ghost…</div><div id="mesh-stats">—</div></div>
         <div class="notice" id="notice" role="alert" hidden></div>
       </div>
-    </main>`;
+    </main>
+    <dialog id="prusa-upload" aria-labelledby="upload-heading">
+      <h2 id="upload-heading">Export to Prusa</h2>
+      <p id="upload-status" role="status" aria-live="polite">Uploading ghost...</p>
+      <progress id="upload-progress" max="100" value="0" aria-label="Upload progress"></progress>
+      <a id="prusa-continue" class="primary-button" rel="noopener noreferrer" hidden></a>
+      <button id="cancel-upload" class="secondary-button" type="button">Cancel upload</button>
+    </dialog>`;
 }

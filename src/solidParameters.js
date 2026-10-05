@@ -3,7 +3,7 @@ export const solidDefaults = {
   wallThickness: 2,
   openBottom: true,
   eyes: false,
-  eyeMode: 'paired',
+  eyeMode: 'placed',
   placedEyes: [],
   eyeShape: 'oval',
   eyeWidth: 6,

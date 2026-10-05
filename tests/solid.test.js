@@ -29,7 +29,7 @@ test('hollow shell has an open underside, manifold rim and measured 2 mm walls',
 
 test('round and oval eyes cut into the cavity and preserve the rear wall', () => {
   for (const shape of ['round', 'oval']) {
-    const eye = processor.process(outer, { hollow: true, eyes: true, eyeShape: shape });
+    const eye = processor.process(outer, { hollow: true, eyes: true, eyeMode: 'paired', eyeShape: shape });
     validateSolid(eye);
     const z = outer.boundingBox.max.z * 0.65;
     for (const x of [-6.5, 6.5]) {
@@ -43,7 +43,7 @@ test('round and oval eyes cut into the cavity and preserve the rear wall', () =>
 });
 
 test('face rotation moves the holes to another side', () => {
-  const eye = processor.process(outer, { hollow: true, eyes: true, eyeAngle: 90 });
+  const eye = processor.process(outer, { hollow: true, eyes: true, eyeMode: 'paired', eyeAngle: 90 });
   const z = outer.boundingBox.max.z * 0.65;
   assert.ok(first(eye, [100, 6.5, z], [-1, 0, 0]).point.x < 0);
   assert.ok(first(eye, [6.5, -100, z], [0, 1, 0]).point.y < -15);
@@ -57,7 +57,7 @@ test('closed floor and larger thickness produce the expected floor and wall', ()
   assert.equal(vertical[0].point.z, 0);
   assert.ok(Math.abs(vertical[1].point.z - 3) < 0.1);
   assert.ok(Math.abs(first(hollow, [0, 0, 20], [1, 0, 0]).point.x - 17) < 0.12);
-  const eyes = processor.process(outer, { hollow: true, openBottom: false, wallThickness: 3, eyes: true });
+  const eyes = processor.process(outer, { hollow: true, openBottom: false, wallThickness: 3, eyes: true, eyeMode: 'paired' });
   validateSolid(eyes);
 });
 
@@ -76,7 +76,7 @@ test('folded hollow rabbit with eyes survives an STL round trip', () => {
     measured++;
   }
   assert.ok(measured > 1000);
-  const eye = processor.process(rabbit, { hollow: true, eyes: true });
+  const eye = processor.process(rabbit, { hollow: true, eyes: true, eyeMode: 'paired' });
   validateSolid(eye);
   const data = new STLExporter().parse(new THREE.Mesh(eye), { binary: true });
   const imported = new STLLoader().parse(data.buffer); imported.deleteAttribute('normal');
@@ -87,16 +87,16 @@ test('folded hollow rabbit with eyes survives an STL round trip', () => {
 
 test('invalid thickness and eyes fail clearly instead of exporting blind recesses', () => {
   assert.throws(() => processor.process(outer, { hollow: true, wallThickness: 0 }), /thickness/);
-  assert.throws(() => processor.process(outer, { hollow: false, eyes: true }), /hollow interior/);
-  assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeSpacing: 2 }), /spacing/);
-  assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeWidth: 35, eyeSpacing: 40 }), /interior|depth/);
+  assert.throws(() => processor.process(outer, { hollow: false, eyes: true, eyeMode: 'paired' }), /hollow interior/);
+  assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeMode: 'paired', eyeSpacing: 2 }), /spacing/);
+  assert.throws(() => processor.process(outer, { hollow: true, eyes: true, eyeMode: 'paired', eyeWidth: 35, eyeSpacing: 40 }), /interior|depth/);
   assert.throws(() => processor.process(outer, { hollow: true, wallThickness: 30 }), /interior/);
 });
 
 test('top smoothing endpoints remain printable with hollow walls and eye booleans', () => {
   for (const topSmoothing of [0, 1]) {
     const outer = generateGhost(demoGeometry(), new THREE.Matrix4(), { topSmoothing });
-    const result = processor.process(outer, { hollow: true, eyes: true });
+    const result = processor.process(outer, { hollow: true, eyes: true, eyeMode: 'paired' });
     validateSolid(result);
     const bytes = new STLExporter().parse(new THREE.Mesh(result), { binary: true });
     const imported = new STLLoader().parse(bytes.buffer); imported.deleteAttribute('normal');

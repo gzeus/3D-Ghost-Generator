@@ -4,6 +4,7 @@ import { createViewer } from './viewer.js';
 import { defaults } from './ghostGenerator.js';
 import { solidDefaults } from './solidParameters.js';
 import { exportSTL } from './exportSTL.js';
+import { setupPrusaExports } from './prusaExport.js';
 import exampleURL from './assets/benchy_example.stl?url';
 import boo1URL from './assets/audio/boo1.wav?url';
 import boo2URL from './assets/audio/boo2.wav?url';
@@ -21,7 +22,21 @@ const placedEyes = [];
 const exportSounds = [boo1URL, boo2URL, boo3URL, boo4URL];
 const exportAudio = new Audio();
 exportAudio.loop = false;
+let soundsEnabled = true;
+try { soundsEnabled = localStorage.getItem('ghost-studio-spooky-sounds') !== 'off'; } catch {}
+function syncSoundButton() {
+  $('toggle-sounds').textContent = soundsEnabled ? 'Disable Spooky sounds' : 'Enable Spooky sounds';
+  $('toggle-sounds').setAttribute('aria-pressed', String(!soundsEnabled));
+}
+syncSoundButton();
+$('toggle-sounds').addEventListener('click', () => {
+  soundsEnabled = !soundsEnabled;
+  if (!soundsEnabled) exportAudio.pause();
+  try { localStorage.setItem('ghost-studio-spooky-sounds', soundsEnabled ? 'on' : 'off'); } catch {}
+  syncSoundButton();
+});
 function playExportSound() {
+  if (!soundsEnabled) return;
   exportAudio.pause();
   exportAudio.src = exportSounds[Math.floor(Math.random() * exportSounds.length)];
   // Playback is optional: a browser audio restriction must not interrupt the export.
@@ -37,7 +52,7 @@ function parameters() {
   for (const key of ['hollow', 'openBottom', 'eyes']) p[key] = $(key).checked;
   for (const key of ['wallThickness', 'eyeWidth', 'eyeHeight', 'eyeSpacing']) p[key] = Number($(key).value);
   p.eyeShape = $('eyeShape').value;
-  p.eyeMode = $('clickEyes').checked ? 'placed' : 'paired';
+  p.eyeMode = !$('proceduralEyes').checked ? 'placed' : 'paired';
   p.placedEyes = placedEyes;
   return p;
 }
@@ -131,14 +146,14 @@ function syncSolidControls() {
   $('eyeHeight-row').hidden = round;
   $('eyeHeight').disabled = round;
   $('eyeWidth-label').textContent = round ? 'Eye diameter' : 'Eye width';
-  const clicked = $('clickEyes').checked;
+  const clicked = !$('proceduralEyes').checked;
   $('paired-eye-controls').hidden = clicked;
   $('placed-eye-controls').hidden = !clicked;
   $('placement-help').hidden = !clicked;
   syncPlacement();
 }
 function syncPlacement() {
-  const enabled = $('eyes').checked && $('clickEyes').checked && $('hollow').checked;
+  const enabled = $('eyes').checked && !$('proceduralEyes').checked && $('hollow').checked;
   const ready = sourceReady && !$('export').disabled;
   $('placement-banner').hidden = !enabled;
   const sourceView = document.querySelector('[data-mode=source]').classList.contains('active');
@@ -162,17 +177,18 @@ function renderPlacedEyes() {
 $('hollow').addEventListener('change', () => { if (!$('hollow').checked) $('eyes').checked = false; syncSolidControls(); invalidate(); });
 $('eyes').addEventListener('change', () => { if ($('eyes').checked) $('hollow').checked = true; syncSolidControls(); invalidate(); });
 $('openBottom').addEventListener('change', () => invalidate());
-$('clickEyes').addEventListener('change', () => { syncSolidControls(); if ($('clickEyes').checked) document.querySelector('[data-mode=ghost]').click(); invalidate(); });
+$('proceduralEyes').addEventListener('change', () => { syncSolidControls(); if (!$('proceduralEyes').checked) document.querySelector('[data-mode=ghost]').click(); invalidate(); });
 $('undo-eye').addEventListener('click', () => { placedEyes.pop(); renderPlacedEyes(); invalidate(); });
 $('clear-eyes').addEventListener('click', () => { placedEyes.length = 0; renderPlacedEyes(); invalidate(); });
-$('eyeShape').addEventListener('change', () => { syncSolidControls(); if (!$('clickEyes').checked) invalidate(); });
-for (const key of ['wallThickness', 'eyeWidth', 'eyeHeight', 'eyeSpacing']) $(key).addEventListener('input', () => { syncPlacement(); if (!$('clickEyes').checked || key === 'wallThickness') invalidate(); });
+$('eyeShape').addEventListener('change', () => { syncSolidControls(); if ($('proceduralEyes').checked) invalidate(); });
+for (const key of ['wallThickness', 'eyeWidth', 'eyeHeight', 'eyeSpacing']) $(key).addEventListener('input', () => { syncPlacement(); if ($('proceduralEyes').checked || key === 'wallThickness') invalidate(); });
 syncSolidControls();
 $('reset').addEventListener('click', () => { ['x','y','z'].forEach(a => { $(`rotate-${a}`).value = 0; }); invalidate(true); });
 $('generate').addEventListener('click', generate);
 $('fit').addEventListener('click', () => viewer.fit());
 $('demo').addEventListener('click', () => load());
 $('export').addEventListener('click', () => { if (ghost && !$('export').disabled) { exportSTL(ghost, filename); playExportSound(); status('STL exported · happy printing'); } });
+setupPrusaExports({ getModel: () => ({ geometry: ghost, filename }), playSound: playExportSound, status, notice });
 $('file').addEventListener('change', event => { const file = event.target.files[0]; if (file) load(file); event.target.value = ''; });
 const drop = $('drop-zone');
 ['dragenter','dragover'].forEach(name => drop.addEventListener(name, event => { event.preventDefault(); drop.classList.add('dragging'); }));
