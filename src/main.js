@@ -19,6 +19,7 @@ try { viewer = createViewer($('viewport')); viewer.start(); }
 catch (error) { $('notice').hidden = false; $('notice').textContent = 'The 3D preview needs WebGL. Enable hardware acceleration or try a WebGL-capable browser.'; throw error; }
 let worker, sourceReady = false, busy = false, revision = 0, pending = false, ghost, timer, fitNext = true, filename = 'benchy_example.stl', sourceSize;
 const placedEyes = [];
+let placementPaused = false;
 const exportSounds = [boo1URL, boo2URL, boo3URL, boo4URL];
 const exportAudio = new Audio();
 exportAudio.loop = false;
@@ -46,7 +47,7 @@ const rotation = () => ['x', 'y', 'z'].map(a => Number($(`rotate-${a}`).value) |
 const normalized = new Set(['cutoff', 'smoothing', 'topSmoothing', 'bottomSpread', 'foldIrregularity', 'asymmetry', 'eyeLevel']);
 function parameters() {
   const p = { ...defaults, ...solidDefaults };
-  document.querySelectorAll('input[type=range]').forEach(input => { p[input.id] = Number(input.value) / (normalized.has(input.id) ? 100 : 1); });
+  document.querySelectorAll('.sidebar input[type=range]').forEach(input => { p[input.id] = Number(input.value) / (normalized.has(input.id) ? 100 : 1); });
   p.skirtHeight = $('skirtHeight').value === '' ? null : Number($('skirtHeight').value);
   p.targetSize = $('targetSize').value === '' ? null : Number($('targetSize').value);
   for (const key of ['hollow', 'openBottom', 'eyes']) p[key] = $(key).checked;
@@ -131,15 +132,40 @@ async function load(file) {
     worker.postMessage({ type: 'load', buffer, filename }, buffer ? [buffer] : []);
   } catch (error) { if (token !== loadToken) return; status('Could not read file', 'error'); notice(error.message); }
 }
-document.querySelectorAll('input[type=range]').forEach(input => {
+document.querySelectorAll('.sidebar input[type=range]').forEach(input => {
   const show = () => { const unit = input.dataset.unit; $(`${input.id}-value`).textContent = `${input.value}${unit === 'mm' ? ' ' : ''}${unit}`; input.style.setProperty('--fill', `${(Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min)) * 100}%`); };
-  show(); input.addEventListener('input', () => { show(); invalidate(input.id === 'cutoff'); });
+  show(); input.addEventListener('input', () => { show(); if (input.id === 'cutoff') syncPreviewCutoff(); invalidate(input.id === 'cutoff'); });
+});
+function syncPreviewCutoff() {
+  $('preview-cutoff').value = $('cutoff').value;
+  $('preview-cutoff-value').textContent = $('cutoff').value + '%';
+}
+syncPreviewCutoff();
+$('preview-cutoff').addEventListener('input', () => {
+  $('cutoff').value = $('preview-cutoff').value;
+  $('cutoff').dispatchEvent(new Event('input'));
+});
+$('preview-eyes').addEventListener('click', () => {
+  const configured = $('eyes').checked && !$('proceduralEyes').checked && $('hollow').checked;
+  if (configured && !placementPaused) {
+    placementPaused = true;
+    syncPlacement();
+    return;
+  }
+  placementPaused = false;
+  $('hollow').checked = true;
+  $('eyes').checked = true;
+  $('proceduralEyes').checked = false;
+  if (document.querySelector('[data-mode=source]').classList.contains('active')) document.querySelector('[data-mode=ghost]').click();
+  syncSolidControls();
+  if (!configured) invalidate();
 });
 ['x','y','z'].forEach(a => $(`rotate-${a}`).addEventListener('input', () => invalidate(true)));
 $('skirtHeight').addEventListener('input', () => invalidate());
 $('targetSize').addEventListener('input', () => { fitNext = true; invalidate(true); });
 $('reset-size').addEventListener('click', () => { $('targetSize').value = ''; fitNext = true; invalidate(true); });
 function syncSolidControls() {
+  placementPaused = false;
   $('hollow-controls').disabled = !$('hollow').checked;
   $('eye-controls').disabled = !$('eyes').checked;
   const round = $('eyeShape').value === 'round';
@@ -153,8 +179,10 @@ function syncSolidControls() {
   syncPlacement();
 }
 function syncPlacement() {
-  const enabled = $('eyes').checked && !$('proceduralEyes').checked && $('hollow').checked;
+  const enabled = !placementPaused && $('eyes').checked && !$('proceduralEyes').checked && $('hollow').checked;
   const ready = sourceReady && !$('export').disabled;
+  $('preview-eyes').textContent = enabled ? 'Done placing eyes' : 'Place eyes';
+  $('preview-eyes').setAttribute('aria-pressed', String(enabled));
   $('placement-banner').hidden = !enabled;
   const sourceView = document.querySelector('[data-mode=source]').classList.contains('active');
   $('placement-banner').textContent = sourceView ? 'Switch to Ghost or Overlay to place eyes' : ready ? 'Click the ghost to add an eye · Drag to orbit' : 'Update the ghost to resume eye placement';
@@ -216,11 +244,13 @@ function finishCutoffPreview() {
   setViewMode(previous);
 }
 const cutoffKeys = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
-$('cutoff').addEventListener('pointerdown', previewCutoff);
-$('cutoff').addEventListener('keydown', event => { if (cutoffKeys.has(event.key)) previewCutoff(); });
-$('cutoff').addEventListener('keyup', event => { if (cutoffKeys.has(event.key)) finishCutoffPreview(); });
-$('cutoff').addEventListener('blur', finishCutoffPreview);
-$('cutoff').addEventListener('lostpointercapture', finishCutoffPreview);
+for (const input of [$('cutoff'), $('preview-cutoff')]) {
+  input.addEventListener('pointerdown', previewCutoff);
+  input.addEventListener('keydown', event => { if (cutoffKeys.has(event.key)) previewCutoff(); });
+  input.addEventListener('keyup', event => { if (cutoffKeys.has(event.key)) finishCutoffPreview(); });
+  input.addEventListener('blur', finishCutoffPreview);
+  input.addEventListener('lostpointercapture', finishCutoffPreview);
+}
 window.addEventListener('pointerup', finishCutoffPreview);
 window.addEventListener('pointercancel', finishCutoffPreview);
 window.addEventListener('blur', finishCutoffPreview);

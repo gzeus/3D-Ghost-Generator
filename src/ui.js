@@ -70,6 +70,8 @@ export function renderUI() {
         <div class="viewport-top"><div><span class="eyebrow">THE WORKBENCH</span><h2>Watch out - the export is Spoooky!</h2></div><span class="version">Version 1.0</span></div>
         <div class="view-toolbar"><div class="segmented" aria-label="Preview mode">${['ghost','source','overlay'].map(mode => `<button data-mode="${mode}" class="${mode === 'ghost' ? 'active' : ''}" aria-pressed="${mode === 'ghost'}">${mode[0].toUpperCase() + mode.slice(1)}</button>`).join('')}</div><button id="fit" class="fit-button">⛶ <span>Fit camera</span></button></div>
         <div id="viewport" aria-label="Interactive 3D preview"></div>
+        <div class="preview-cutoff"><label for="preview-cutoff">Use source above</label><output id="preview-cutoff-value" for="preview-cutoff">58%</output><input id="preview-cutoff" type="range" min="0" max="100" step="1" value="58" aria-orientation="vertical" /></div>
+        <button id="preview-eyes" class="preview-eyes" type="button" aria-pressed="false">Place eyes</button>
         <div id="placement-banner" class="placement-banner" hidden>Click the ghost to add an eye · Drag to orbit</div>
         <div class="viewport-bottom"><label class="toggle-label"><input id="show-source" type="checkbox"/> Show source</label><span>Drag to orbit <b>·</b> Scroll to zoom <b>·</b> Right-drag to pan</span><div class="axis"><span>Z ↑</span><small>mm</small></div></div>
         <div class="statusbar"><div id="status" role="status" aria-live="polite"><i></i> Preparing your ghost…</div><div id="mesh-stats">—</div></div>
